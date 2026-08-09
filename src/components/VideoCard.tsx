@@ -8,7 +8,6 @@ import {
   Edit2,
   Trash2,
   Sparkles,
-  Flame,
 } from 'lucide-react';
 import { VideoItem } from '../types/video';
 import { formatViews, getLikePercentage } from '../utils/formatters';
@@ -21,7 +20,7 @@ interface VideoCardProps {
   onShare: (video: VideoItem) => void;
   isAdmin: boolean;
   onEdit?: (video: VideoItem) => void;
-  onDelete?: (video: VideoItem) => void;
+  onDelete?: (id: string) => void;
 }
 
 export const VideoCard: React.FC<VideoCardProps> = ({
@@ -37,36 +36,43 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const likePct = getLikePercentage(video);
 
   return (
-    <div className="group relative bg-[#16161e] border border-white/10 rounded-2xl overflow-hidden hover:border-red-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-red-950/30 flex flex-col">
+    <article
+      id={`video-card-${video.id}`}
+      className="group relative bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-orange-400 transition-all duration-200 hover:shadow-lg flex flex-col"
+      itemScope
+      itemType="https://schema.org/VideoObject"
+    >
+      <meta itemProp="name" content={video.title || 'HD Adult Video'} />
+      <meta itemProp="description" content={`Watch ${video.title || 'HD video'} on HOT HAVEN.`} />
+      <meta itemProp="thumbnailUrl" content={video.thumbnail} />
+      <meta itemProp="uploadDate" content={new Date(video.createdAt || Date.now()).toISOString()} />
+      {video.duration && <meta itemProp="duration" content={video.duration} />}
+
       {/* Thumbnail Container */}
       <div
-        className="relative w-full min-h-[220px] bg-[#0c0c14] overflow-hidden cursor-pointer flex items-center justify-center p-1"
+        className="relative aspect-video w-full bg-slate-900 overflow-hidden cursor-pointer flex items-center justify-center"
         onClick={() => onSelect(video)}
       >
-        {video.thumbnail ? (
-          <img
-            src={video.thumbnail}
-            alt={video.title || "Video Thumbnail"}
-            className="max-w-full max-h-[380px] object-contain rounded-lg transform group-hover:scale-105 transition-transform duration-500 brightness-95 group-hover:brightness-100"
-            loading="lazy"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
-        ) : (
-          <div className="w-full h-full bg-[#12121c] flex flex-col items-center justify-center text-slate-500 p-4 text-center">
-            <Play className="w-8 h-8 mb-1 text-red-500/80" />
-            <span className="text-[10px] font-mono tracking-wider uppercase text-slate-400">Ultra HD Stream</span>
-          </div>
-        )}
+        <img
+          src={video.thumbnail}
+          alt={video.title || 'Video Thumbnail'}
+          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            // Fallback placeholder with clean orange badge
+            const target = e.target as HTMLElement;
+            target.style.display = 'none';
+          }}
+        />
 
-        {/* Hover Overlay Glow */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent opacity-85 group-hover:opacity-95 transition-opacity"></div>
+        {/* Subtle Bottom Gradient for Duration Contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-80 group-hover:opacity-90 transition-opacity"></div>
 
-        {/* Play Icon Overlay */}
+        {/* Clean Play Icon Center Hover */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-lg group-hover:bg-gradient-to-tr group-hover:from-red-600 group-hover:to-orange-500 group-hover:border-transparent group-hover:scale-110 group-hover:shadow-red-600/50 transition-all duration-300">
-            <Play className="w-5 h-5 text-white fill-white ml-0.5 group-hover:scale-110 transition-transform duration-300" />
+          <div className="w-11 h-11 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-lg transform scale-90 opacity-0 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200">
+            <Play className="w-5 h-5 fill-orange-600 ml-0.5" />
           </div>
         </div>
 
@@ -74,118 +80,108 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
           <div className="flex items-center gap-1.5">
             {video.isFeatured && (
-              <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-red-600 to-orange-500 text-white text-[10px] font-bold uppercase flex items-center gap-1 shadow-md">
-                <Sparkles className="w-3 h-3 text-amber-200" /> HOT
+              <span className="px-2 py-0.5 rounded-md bg-orange-500 text-white text-[10px] font-bold uppercase flex items-center gap-1 shadow-sm">
+                <Sparkles className="w-3 h-3 text-white" /> HOT
+              </span>
+            )}
+            {video.provider && (
+              <span className="px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-sm text-slate-200 text-[10px] font-medium uppercase font-mono">
+                {video.provider}
               </span>
             )}
           </div>
-
-          {video.duration ? (
-            <span className="px-2 py-0.5 rounded-md bg-black/80 text-amber-400 border border-white/10 font-mono text-[11px] font-bold">
-              {video.duration}
-            </span>
-          ) : null}
         </div>
 
-        {/* Admin Quick Action Overlay */}
-        {isAdmin && (
-          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-30">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit?.(video);
-              }}
-              className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-lg transition-colors cursor-pointer flex items-center gap-1"
-              title="Edit Video"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>Edit</span>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete?.(video);
-              }}
-              className="px-2 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg transition-colors cursor-pointer flex items-center gap-1"
-              title="Delete Video"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete</span>
-            </button>
+        {/* Duration Badge */}
+        {video.duration && (
+          <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-sm text-white text-[10px] font-bold font-mono">
+            {video.duration}
           </div>
         )}
       </div>
 
       {/* Card Body - Video Title */}
       <div
-        className="px-3.5 pt-3 pb-1 bg-[#16161e] cursor-pointer"
+        className="px-3.5 pt-3 pb-1 bg-white cursor-pointer"
         onClick={() => onSelect(video)}
       >
-        <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors line-clamp-1">
+        <h3 className="text-sm font-bold text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-2 leading-snug">
           {video.title || 'HD Video Stream'}
         </h3>
       </div>
 
       {/* Card Info Details (Views & Likes in Percentage) */}
-      <div className="p-3.5 pt-1.5 flex items-center justify-between text-xs text-slate-400 bg-[#16161e]">
-        <div className="flex items-center gap-3 font-medium">
-          <span className="flex items-center gap-1 text-slate-300 font-mono text-[11px]">
-            <Eye className="w-3.5 h-3.5 text-red-400" />
+      <div className="p-3.5 pt-1.5 flex items-center justify-between text-xs text-slate-500 bg-white mt-auto">
+        <div className="flex items-center gap-2.5 font-medium">
+          <span className="flex items-center gap-1 text-slate-600 font-mono text-[11px]">
+            <Eye className="w-3.5 h-3.5 text-orange-500" />
             <span>{formatViews(video.views)}</span>
           </span>
 
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/25 text-amber-300 font-bold text-[11px] font-mono">
-            <Heart className="w-3 h-3 fill-amber-400 text-amber-400" />
-            <span>{likePct}% liked</span>
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 font-bold text-[11px] font-mono border border-orange-100">
+            <Heart className="w-3 h-3 fill-orange-500 text-orange-500" />
+            <span>{likePct}%</span>
           </span>
         </div>
 
+        {/* Quick Action Controls */}
         <div className="flex items-center gap-1">
           <button
-            onClick={() => onToggleBookmark(video)}
+            id={`bookmark-btn-${video.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleBookmark(video);
+            }}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isBookmarked
-                ? 'bg-amber-500/20 text-amber-300'
-                : 'hover:bg-white/10 text-slate-400 hover:text-white'
+                ? 'bg-orange-500 text-white'
+                : 'text-slate-400 hover:text-orange-500 hover:bg-orange-50'
             }`}
-            title={isBookmarked ? 'Remove Bookmark' : 'Save Video'}
+            title={isBookmarked ? 'Remove Bookmark' : 'Save to Bookmarks'}
           >
-            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-amber-400' : ''}`} />
+            <Bookmark className="w-3.5 h-3.5" />
           </button>
+
+          <button
+            id={`share-btn-${video.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onShare(video);
+            }}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Share Video"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+          </button>
+
+          {isAdmin && (
+            <div className="flex items-center gap-0.5 ml-1 pl-1 border-l border-slate-200">
+              <button
+                id={`edit-btn-${video.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onEdit) onEdit(video);
+                }}
+                className="p-1.5 rounded-lg text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer"
+                title="Edit Video"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                id={`delete-btn-${video.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onDelete && confirm('Delete this video?')) onDelete(video.id);
+                }}
+                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                title="Delete Video"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Admin Bottom Bar */}
-      {isAdmin && (
-        <div className="px-3 py-2 bg-red-950/40 border-t border-red-500/30 flex items-center justify-between text-xs">
-          <span className="text-amber-400 font-mono text-[10px] font-bold">ADMIN PANEL</span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit?.(video);
-              }}
-              className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border border-amber-500/40 text-[11px] font-bold transition-colors cursor-pointer"
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete?.(video);
-              }}
-              className="px-2 py-0.5 rounded bg-red-600/30 hover:bg-red-600/60 text-red-300 border border-red-500/50 text-[11px] font-bold transition-colors cursor-pointer"
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </article>
   );
 };
-

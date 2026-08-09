@@ -15,24 +15,24 @@ export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-center justify-between gap-3 p-4 rounded-xl border shadow-2xl backdrop-blur-md transition-all duration-300 animate-slide-up ${
+          className={`pointer-events-auto flex items-center justify-between gap-3 p-4 rounded-xl border shadow-xl bg-white transition-all duration-300 animate-slide-up ${
             toast.type === 'success'
-              ? 'bg-[#15231c]/90 border-emerald-500/40 text-emerald-300'
+              ? 'border-orange-200 text-slate-800'
               : toast.type === 'error'
-              ? 'bg-[#2b1618]/90 border-red-500/40 text-red-300'
-              : 'bg-[#181a26]/90 border-blue-500/40 text-blue-300'
+              ? 'border-red-200 text-slate-800'
+              : 'border-slate-200 text-slate-800'
           }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
-            {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />}
-            {toast.type === 'info' && <Info className="w-5 h-5 text-blue-400 shrink-0" />}
+            {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-orange-500 shrink-0" />}
+            {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />}
+            {toast.type === 'info' && <Info className="w-5 h-5 text-orange-500 shrink-0" />}
             <span className="text-sm font-medium leading-snug truncate">{toast.message}</span>
           </div>
 
           <button
             onClick={() => onDismiss(toast.id)}
-            className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors shrink-0 cursor-pointer"
+            className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

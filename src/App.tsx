@@ -4,16 +4,12 @@ import {
   Search,
   Filter,
   SlidersHorizontal,
-  PlusCircle,
-  Bookmark,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Eye,
-  Heart,
-  ShieldCheck,
-  Tv,
+  Sparkles,
+  TrendingUp,
+  Award,
 } from 'lucide-react';
 import { VideoItem, VideoCategory, SortOption, ToastMessage } from './types/video';
 import {
@@ -39,6 +35,16 @@ import { Footer } from './components/Footer';
 const ITEMS_PER_PAGE = 12;
 const DEFAULT_ADMIN_PIN = '8888';
 
+const CATEGORIES: VideoCategory[] = [
+  'All',
+  'HD Videos',
+  'Trending',
+  'Amateur',
+  'Solo',
+  'Hardcore',
+  'VR & 4K',
+];
+
 export default function App() {
   // 1. Age Gate State
   const [isAgeVerified, setIsAgeVerified] = useState<boolean>(() => {
@@ -52,6 +58,7 @@ export default function App() {
 
   // 3. Search & Filtering
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<VideoCategory>('All');
   const [sortBy, setSortBy] = useState<SortOption>('latest');
   const [currentPage, setCurrentPage] = useState<number>(1);
 
@@ -170,7 +177,14 @@ export default function App() {
   const filteredVideos = useMemo(() => {
     let result = [...videos];
 
-    // Search Query Filter (URL or provider)
+    // Category Filter
+    if (selectedCategory !== 'All') {
+      result = result.filter(
+        (v) => v.category && v.category.toLowerCase() === selectedCategory.toLowerCase()
+      );
+    }
+
+    // Search Query Filter (URL, title or provider)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
@@ -194,7 +208,7 @@ export default function App() {
     }
 
     return result;
-  }, [videos, searchQuery, sortBy]);
+  }, [videos, searchQuery, selectedCategory, sortBy]);
 
   // Pagination Math
   const totalPages = Math.ceil(filteredVideos.length / ITEMS_PER_PAGE) || 1;
@@ -206,7 +220,7 @@ export default function App() {
   // Reset page when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, sortBy]);
+  }, [searchQuery, selectedCategory, sortBy]);
 
   // Featured Hero Video selection
   const featuredVideo = useMemo(() => {
@@ -227,7 +241,7 @@ export default function App() {
   const handleToggleBookmark = (video: VideoItem) => {
     if (bookmarkedIds.includes(video.id)) {
       setBookmarkedIds((prev) => prev.filter((id) => id !== video.id));
-      showToast(`Removed "${video.title.slice(0, 20)}..." from bookmarks`, 'info');
+      showToast(`Removed "${video.title.slice(0, 20)}..." from saved bookmarks`, 'info');
     } else {
       setBookmarkedIds((prev) => [...prev, video.id]);
       showToast(`Saved "${video.title.slice(0, 20)}..." to bookmarks`, 'success');
@@ -325,7 +339,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0d11] text-slate-100 font-sans flex flex-col selection:bg-red-600 selection:text-white">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 font-sans flex flex-col selection:bg-orange-500 selection:text-white">
       {/* Age Verification Modal */}
       <AgeGateModal isOpen={showAgeGateModal} onConfirm={handleConfirmAge} />
 
@@ -333,11 +347,12 @@ export default function App() {
       <Header
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        isAdmin={isAdmin}
-        onOpenAdminModal={() => setShowAdminModal(true)}
-        bookmarkedCount={bookmarkedIds.length}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        bookmarkCount={bookmarkedIds.length}
         onOpenBookmarks={() => setShowBookmarksDrawer(true)}
-        onOpenAgeGate={() => setShowAgeGateModal(true)}
+        onOpenAdmin={() => setShowAdminModal(true)}
+        isAdmin={isAdmin}
       />
 
       {/* Main Content */}
@@ -346,7 +361,7 @@ export default function App() {
         {!searchQuery && featuredVideo && (
           <HeroFeatured
             video={featuredVideo}
-            onSelectVideo={handleSelectVideo}
+            onPlay={handleSelectVideo}
             onToggleBookmark={handleToggleBookmark}
             isBookmarked={bookmarkedIds.includes(featuredVideo.id)}
             onShare={handleShareVideo}
@@ -354,67 +369,85 @@ export default function App() {
         )}
 
         {/* Video Catalog Section */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Controls Bar: Sort & Results Count */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 pb-4 border-b border-white/5">
+        <section
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+          itemScope
+          itemType="https://schema.org/CollectionPage"
+        >
+          {/* Category Pill Filters Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                    : 'bg-white border border-slate-200 text-slate-700 hover:border-orange-300 hover:text-orange-600'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Controls Bar: Section Title & Results Count */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white font-display flex items-center gap-2">
-                <Flame className="w-6 h-6 text-red-500 animate-pulse" />
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 font-display flex items-center gap-2.5">
+                <Flame className="w-6 h-6 text-orange-500" />
                 <span>
                   {searchQuery
-                    ? `Search results for "${searchQuery}"`
-                    : 'ALL HOT VIDEOS'}
+                    ? `Search Results for "${searchQuery}"`
+                    : selectedCategory !== 'All'
+                    ? `${selectedCategory.toUpperCase()} VIDEOS`
+                    : 'ALL HD ADULT VIDEOS'}
                 </span>
-                <span className="text-xs text-slate-400 font-normal">
-                  ({filteredVideos.length} items)
+                <span className="text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+                  {filteredVideos.length} Streams
                 </span>
-              </h2>
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Fast responsive playback in Ultra HD & 4K quality with full metadata.
+              </p>
             </div>
 
-            {/* Sort Dropdown */}
-            <div className="flex items-center gap-2 self-end sm:self-auto">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5 text-amber-400" /> Sort By:
-              </span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="px-3 py-1.5 rounded-xl bg-[#16161e] border border-white/10 text-white text-xs font-bold focus:outline-none focus:border-red-500 cursor-pointer"
-              >
-                <option value="latest">Latest Uploads</option>
-                <option value="views">Most Viewed</option>
-                <option value="likes">Top Liked</option>
-                <option value="featured">Featured First</option>
-              </select>
+            {/* Total Streams count */}
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Total catalog:</span>
+              <span className="font-mono font-bold text-slate-900">{videos.length} videos</span>
             </div>
           </div>
 
           {/* Catalog Grid */}
           {isLoadingVideos ? (
             <div className="py-24 flex flex-col items-center justify-center text-slate-400">
-              <RefreshCw className="w-10 h-10 animate-spin text-red-500 mb-3" />
-              <p className="text-sm font-semibold">Loading video catalog...</p>
+              <RefreshCw className="w-10 h-10 animate-spin text-orange-500 mb-3" />
+              <p className="text-sm font-semibold text-slate-600">Loading HD video streams...</p>
             </div>
           ) : paginatedVideos.length === 0 ? (
-            <div className="py-20 text-center bg-[#14141e] rounded-3xl border border-white/5 p-8">
-              <Search className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-white mb-1">No Videos Found</h3>
-              <p className="text-slate-400 text-sm max-w-md mx-auto mb-4">
+            <div className="py-16 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-1">No Videos Found</h3>
+              <p className="text-slate-500 text-sm max-w-md mx-auto mb-4">
                 {videos.length === 0
-                  ? 'No videos in catalog yet. Click or tap the logo 3 times to authenticate and add your first video.'
-                  : 'No video items match your search query. Try clearing your search.'}
+                  ? 'No videos in catalog yet. Click the "Manage" button in the top right to authenticate (PIN: 8888) and add videos.'
+                  : 'No video items match your search query or selected category.'}
               </p>
-              {videos.length > 0 && searchQuery && (
+              {(searchQuery || selectedCategory !== 'All') && (
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-orange-500 text-white text-xs font-bold shadow-md cursor-pointer"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('All');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold shadow-md shadow-orange-500/20 cursor-pointer transition-all"
                 >
-                  Clear Search
+                  Reset All Filters
                 </button>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {paginatedVideos.map((video) => (
                 <VideoCard
                   key={video.id}
@@ -428,7 +461,7 @@ export default function App() {
                     setEditingVideo(v);
                     setShowAdminModal(true);
                   }}
-                  onDelete={(v) => handleDeleteVideo(v.id)}
+                  onDelete={(id) => handleDeleteVideo(id)}
                 />
               ))}
             </div>
@@ -436,29 +469,31 @@ export default function App() {
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="mt-10 flex items-center justify-center gap-2">
+            <div className="mt-12 flex items-center justify-center gap-2">
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                className="p-2.5 rounded-xl bg-[#16161e] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
+                title="Previous Page"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
 
-              <span className="px-4 py-2 rounded-xl bg-[#16161e] border border-white/10 text-xs font-bold text-slate-300 font-mono">
+              <span className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 font-mono shadow-xs">
                 Page {currentPage} of {totalPages}
               </span>
 
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                className="p-2.5 rounded-xl bg-[#16161e] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
+                title="Next Page"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           )}
-        </div>
+        </section>
       </main>
 
       {/* Video Player Modal */}

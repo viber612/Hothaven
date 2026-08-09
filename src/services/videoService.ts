@@ -15,16 +15,39 @@ import { VideoItem } from '../types/video';
 import { generateRandomStats, getLikePercentage } from '../utils/formatters';
 
 const COLLECTION_NAME = 'videos';
+const CACHE_KEY = 'hothaven_cached_videos';
 
-const SEED_VIDEOS: Omit<VideoItem, 'id'>[] = [];
+function getLocalCachedVideos(): VideoItem[] {
+  try {
+    const data = localStorage.getItem(CACHE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setLocalCachedVideos(videos: VideoItem[]): void {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(videos));
+  } catch (err) {
+    console.warn('Unable to cache videos locally', err);
+  }
+}
 
 export function subscribeToVideos(callback: (videos: VideoItem[]) => void): () => void {
+  // First emit cached videos immediately for instant loading
+  const initialCache = getLocalCachedVideos();
+  if (initialCache.length > 0) {
+    callback(initialCache);
+  }
+
   const colRef = collection(db, COLLECTION_NAME);
 
   const unsubscribe = onSnapshot(
     colRef,
     (snapshot) => {
       if (snapshot.empty) {
+        setLocalCachedVideos([]);
         callback([]);
         return;
       }
@@ -66,11 +89,13 @@ export function subscribeToVideos(callback: (videos: VideoItem[]) => void): () =
       // Sort by createdAt descending
       videos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+      setLocalCachedVideos(videos);
       callback(videos);
     },
     (error) => {
-      console.error('Error listening to videos collection:', error);
-      callback([]);
+      console.warn('Firestore subscription notice (using offline cache):', error?.message || error);
+      const fallback = getLocalCachedVideos();
+      callback(fallback);
     }
   );
 
@@ -88,7 +113,6 @@ export async function addVideoToFirestore(
     likePercentage?: number;
   }
 ): Promise<string> {
-  const colRef = collection(db, COLLECTION_NAME);
   const stats = generateRandomStats();
 
   const finalViews = typeof videoData.views === 'number' && videoData.views >= 200_000 ? videoData.views : stats.views;
@@ -109,9 +133,23 @@ export async function addVideoToFirestore(
     createdAt: new Date().toISOString(),
   };
 
-  const sanitized = sanitizeForFirestore(newItem);
-  const docRef = await addDoc(colRef, sanitized);
-  return docRef.id;
+  const tempId = 'vid_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  const cached = getLocalCachedVideos();
+  setLocalCachedVideos([{ id: tempId, ...newItem }, ...cached]);
+
+  try {
+    const colRef = collection(db, COLLECTION_NAME);
+    const sanitized = sanitizeForFirestore(newItem);
+    const docRef = await addDoc(colRef, sanitized);
+    
+    // Update temporary ID with real Firestore doc ID
+    const updated = getLocalCachedVideos().map((v) => (v.id === tempId ? { ...v, id: docRef.id } : v));
+    setLocalCachedVideos(updated);
+    return docRef.id;
+  } catch (err) {
+    console.warn('Firestore offline/write notice (saved to local cache):', err);
+    return tempId;
+  }
 }
 
 export async function batchAddVideosToFirestore(
@@ -123,8 +161,8 @@ export async function batchAddVideosToFirestore(
     }
   >
 ): Promise<string[]> {
-  const colRef = collection(db, COLLECTION_NAME);
   const ids: string[] = [];
+  const newCachedItems: VideoItem[] = [];
 
   for (const videoData of videosData) {
     const stats = generateRandomStats();
@@ -146,10 +184,22 @@ export async function batchAddVideosToFirestore(
       createdAt: new Date().toISOString(),
     };
 
-    const sanitized = sanitizeForFirestore(newItem);
-    const docRef = await addDoc(colRef, sanitized);
-    ids.push(docRef.id);
+    const tempId = 'vid_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    newCachedItems.push({ id: tempId, ...newItem });
+
+    try {
+      const colRef = collection(db, COLLECTION_NAME);
+      const sanitized = sanitizeForFirestore(newItem);
+      const docRef = await addDoc(colRef, sanitized);
+      ids.push(docRef.id);
+    } catch (err) {
+      console.warn('Firestore batch write notice:', err);
+      ids.push(tempId);
+    }
   }
+
+  const existing = getLocalCachedVideos();
+  setLocalCachedVideos([...newCachedItems, ...existing]);
 
   return ids;
 }
@@ -158,43 +208,70 @@ export async function updateVideoInFirestore(
   id: string,
   updates: Partial<Omit<VideoItem, 'id'>>
 ): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, id);
-  const sanitized = sanitizeForFirestore(updates);
-  await updateDoc(docRef, sanitized);
+  const cached = getLocalCachedVideos();
+  setLocalCachedVideos(
+    cached.map((v) => (v.id === id ? { ...v, ...updates } : v))
+  );
+
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    const sanitized = sanitizeForFirestore(updates);
+    await updateDoc(docRef, sanitized);
+  } catch (err) {
+    console.warn('Firestore update notice (cached locally):', err);
+  }
 }
 
 export async function deleteVideoFromFirestore(id: string): Promise<void> {
-  const docRef = doc(db, COLLECTION_NAME, id);
-  await deleteDoc(docRef);
+  const cached = getLocalCachedVideos();
+  setLocalCachedVideos(cached.filter((v) => v.id !== id));
+
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Firestore delete notice:', err);
+  }
 }
 
 export async function deleteAllVideosFromFirestore(): Promise<void> {
+  setLocalCachedVideos([]);
   try {
     const colRef = collection(db, COLLECTION_NAME);
     const snapshot = await getDocs(colRef);
     const deletePromises = snapshot.docs.map((docSnap) => deleteDoc(doc(db, COLLECTION_NAME, docSnap.id)));
     await Promise.all(deletePromises);
   } catch (err) {
-    console.error('Failed to delete all videos from Firestore:', err);
+    console.warn('Firestore clear catalog notice:', err);
   }
 }
 
 export async function incrementVideoViews(id: string, currentViews: number): Promise<void> {
+  const cached = getLocalCachedVideos();
+  setLocalCachedVideos(
+    cached.map((v) => (v.id === id ? { ...v, views: currentViews + 1 } : v))
+  );
+
   try {
     const docRef = doc(db, COLLECTION_NAME, id);
     await updateDoc(docRef, { views: currentViews + 1 });
   } catch (err) {
-    console.warn('Could not increment views', err);
+    console.warn('Could not increment views on Firestore:', err);
   }
 }
 
 export async function toggleVideoLike(id: string, currentLikes: number, isLiking: boolean): Promise<void> {
+  const newLikes = isLiking ? currentLikes + 1 : Math.max(0, currentLikes - 1);
+  const cached = getLocalCachedVideos();
+  setLocalCachedVideos(
+    cached.map((v) => (v.id === id ? { ...v, likes: newLikes } : v))
+  );
+
   try {
     const docRef = doc(db, COLLECTION_NAME, id);
-    const newLikes = isLiking ? currentLikes + 1 : Math.max(0, currentLikes - 1);
     await updateDoc(docRef, { likes: newLikes });
   } catch (err) {
-    console.warn('Could not toggle video like', err);
+    console.warn('Could not toggle video like on Firestore:', err);
   }
 }
 

@@ -3,20 +3,29 @@
     "videos": {
       "title": "Videos",
       "description": "Video catalog items for HOT HAVEN streaming portal",
+      "type": "object",
       "properties": {
         "title": { "type": "string", "description": "Title of the video" },
         "url": { "type": "string", "description": "Original video URL or iframe embed code" },
         "embedUrl": { "type": "string", "description": "Parsed embed src or video source URL" },
         "videoType": { "type": "string", "description": "Video type: html5, embed, or iframe" },
         "thumbnail": { "type": "string", "description": "Thumbnail image URL or base64 data URI" },
-        "category": { "type": "string", "description": "Category name (HD Videos, Trending, Amateur, Solo, Hardcore)" },
+        "category": { "type": "string", "description": "Category name (HD Videos, Trending, Amateur, Solo, Hardcore, VR & 4K)" },
         "duration": { "type": "string", "description": "Formatted duration (e.g. 14:20)" },
         "views": { "type": "number", "description": "View counter" },
         "likes": { "type": "number", "description": "Like counter" },
+        "likePercentage": { "type": "number", "description": "Like percentage rating" },
         "isFeatured": { "type": "boolean", "description": "Whether video is featured" },
         "createdAt": { "type": "string", "description": "Creation ISO date string" }
       },
       "required": ["title", "url", "category"]
     }
+  },
+  "firestore": {
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/videos" },
+      "description": "Catalog of streaming adult videos"
+    }
   }
 }
+

@@ -10,20 +10,19 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   Sparkles,
-  Key,
   RefreshCw,
   Upload,
   Layers,
   FileVideo,
-  Dice5,
   Eye,
   Heart,
   Plus,
+  Tv,
 } from 'lucide-react';
 import { VideoItem, VideoCategory } from '../types/video';
 import { parseVideoUrl, getAutoThumbnail } from '../utils/videoParser';
 import { resizeImageFile } from '../utils/thumbnail';
-import { formatViews, formatLikes, generateRandomStats } from '../utils/formatters';
+import { formatViews, generateRandomStats } from '../utils/formatters';
 
 interface BatchVideoDraft {
   id: string;
@@ -111,7 +110,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [singleLikes, setSingleLikes] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Batch Form Fields (Up to 10 videos)
+  // Batch Form Fields
   const [batchSlots, setBatchSlots] = useState<BatchVideoDraft[]>(() =>
     Array.from({ length: 10 }, (_, i) => createEmptyBatchSlot(i))
   );
@@ -124,7 +123,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       setActiveTab('single');
       setTitle(editingVideo.title);
       setUrlInput(editingVideo.url);
-      setCategory(editingVideo.category as VideoCategory);
+      setCategory((editingVideo.category as VideoCategory) || 'HD Videos');
       setDuration(editingVideo.duration);
       setThumbnail(editingVideo.thumbnail);
       setIsFeatured(Boolean(editingVideo.isFeatured));
@@ -141,7 +140,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setTitle('');
     setUrlInput('');
     setCategory('HD Videos');
-    setDuration('');
+    setDuration('15:00');
     setThumbnail('');
     setIsFeatured(false);
     setSingleViews(stats.views);
@@ -191,8 +190,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const base64Resized = await resizeImageFile(file, 800, 450, 0.85);
       setThumbnail(base64Resized);
-      showToast('Custom thumbnail uploaded! This image will be shown to all users.', 'success');
-    } catch (err) {
+      showToast('Custom thumbnail uploaded successfully!', 'success');
+    } catch {
       showToast('Failed to process uploaded image file.', 'error');
     }
   };
@@ -240,23 +239,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const base64Resized = await resizeImageFile(file, 800, 450, 0.85);
       updateBatchSlot(index, 'thumbnail', base64Resized);
       showToast(`Slot #${index + 1} thumbnail uploaded!`, 'success');
-    } catch (err) {
+    } catch {
       showToast('Failed to process image file.', 'error');
     }
-  };
-
-  const rerollBatchSlotStats = (index: number) => {
-    const stats = generateRandomStats();
-    setBatchSlots((prev) => {
-      const updated = [...prev];
-      updated[index] = {
-        ...updated[index],
-        views: stats.views,
-        likes: stats.likes,
-        likePercentage: stats.likePercentage,
-      };
-      return updated;
-    });
   };
 
   const rerollAllBatchStats = () => {
@@ -271,7 +256,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         };
       })
     );
-    showToast('All 10 video slots randomized (200k - 10M views, 90-99% likes)!', 'success');
+    showToast('All batch slots randomized (200k - 10M views, 90-99% likes)!', 'success');
   };
 
   const handleQuickPasteProcess = () => {
@@ -398,8 +383,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         const stats = generateRandomStats();
 
         const views = slot.views >= 200_000 ? slot.views : stats.views;
-        const likePercentage = slot.likePercentage > 0 ? slot.likePercentage : stats.likePercentage;
-        const likes = slot.likes > 0 ? slot.likes : Math.round(views * (likePercentage / 100));
+        const likePct = slot.likePercentage > 0 ? slot.likePercentage : stats.likePercentage;
+        const likes = slot.likes > 0 ? slot.likes : Math.round(views * (likePct / 100));
 
         return {
           title: finalTitle,
@@ -413,7 +398,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           isFeatured: slot.isFeatured,
           views,
           likes,
-          likePercentage,
+          likePercentage: likePct,
         };
       });
 
@@ -425,578 +410,510 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         }
       }
 
-      showToast(`Successfully added ${formattedVideos.length} videos at once to catalog!`, 'success');
+      showToast(`Batch added: ${formattedVideos.length} videos live in catalog!`, 'success');
       resetForm();
       onClose();
     } catch (error) {
-      console.error('Batch publish error:', error);
-      showToast('Batch publishing failed. Please check your connection.', 'error');
+      console.error(error);
+      showToast('Batch publishing failed.', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/92 backdrop-blur-xl animate-fade-in overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-[#14141e] border border-red-500/30 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden p-4 sm:p-6 text-white my-auto max-h-[92vh] overflow-y-auto flex flex-col">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer z-20"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {!isAdmin ? (
-          /* Secret PIN Lock Screen */
-          <div className="py-8 text-center my-auto">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-red-600 p-0.5 mb-4 shadow-xl shadow-amber-500/20">
-              <div className="w-full h-full bg-[#14141e] rounded-[14px] flex items-center justify-center">
-                <Key className="w-8 h-8 text-amber-400" />
-              </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-fade-in overflow-y-auto">
+      <div className="relative w-full max-w-4xl bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh]">
+        {/* Modal Top Bar */}
+        <div className="p-4 sm:p-5 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+              <Flame className="w-5 h-5 fill-white text-white" />
             </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span>Admin Content Manager</span>
+                {isAdmin ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-xs font-semibold border border-emerald-200">
+                    Unlocked
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 text-xs font-semibold border border-orange-200">
+                    PIN Protected
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-slate-500">
+                Publish, edit, auto-parse streaming links, or manage the catalog.
+              </p>
+            </div>
+          </div>
 
-            <h2 className="text-2xl font-black text-white mb-1 font-display">PORTAL KEY ACCESS</h2>
-            <p className="text-slate-400 text-xs sm:text-sm mb-6 max-w-md mx-auto">
-              Enter access PIN code (default: 8888) to unlock batch adding up to 10 videos, custom titles, and catalog manager.
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={onLockAdmin}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Lock</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Unauthenticated PIN View */}
+        {!isAdmin ? (
+          <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 rounded-2xl bg-orange-50 text-orange-500 border border-orange-200 flex items-center justify-center mb-4 shadow-sm">
+              <Lock className="w-8 h-8" />
+            </div>
+            <h4 className="text-xl font-bold text-slate-900 mb-2">Admin Authentication</h4>
+            <p className="text-sm text-slate-500 max-w-sm mb-6">
+              Enter your master administrative PIN code to access video management controls. Default PIN is <strong className="text-orange-600 font-mono">8888</strong>.
             </p>
 
-            <form onSubmit={handlePinSubmit} className="max-w-xs mx-auto space-y-4">
+            <form onSubmit={handlePinSubmit} className="w-full max-w-xs space-y-4">
               <div>
                 <input
                   type="password"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="Enter Access PIN"
-                  className={`w-full px-4 py-3 rounded-xl bg-[#1c1c28] border text-center text-lg font-mono tracking-widest text-amber-300 focus:outline-none transition-all ${
-                    pinError ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-white/10 focus:border-amber-400'
-                  }`}
+                  placeholder="Enter 4-digit PIN (8888)"
+                  className={`w-full h-12 text-center text-xl tracking-widest font-mono rounded-xl bg-slate-50 border ${
+                    pinError ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-200'
+                  } focus:border-orange-500 focus:bg-white focus:outline-none transition-all`}
+                  maxLength={8}
                   autoFocus
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 hover:from-red-500 hover:to-orange-400 shadow-lg shadow-red-600/30 transition-all cursor-pointer"
+                className="w-full h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-md shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                Authenticate Portal
+                <Unlock className="w-4 h-4" />
+                <span>Unlock Dashboard</span>
               </button>
             </form>
           </div>
         ) : (
-          /* Admin Form Mode */
-          <div className="flex-1 flex flex-col">
-            {/* Header & Tabs */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-white/10 gap-3 pr-10">
+          /* Authenticated Admin Management Controls */
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            {/* Tabs Bar */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 gap-2">
               <div className="flex items-center gap-2">
-                <Unlock className="w-5 h-5 text-amber-400" />
-                <h2 className="text-xl font-extrabold text-white font-display">
-                  {editingVideo ? 'EDIT VIDEO CATALOG ITEM' : 'ADMIN VIDEO PUBLISHER'}
-                </h2>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                {onDeleteAllVideos && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm('Wipe ALL videos from catalog? This cannot be undone.')) {
-                        onDeleteAllVideos();
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-red-600/20 border border-red-500/40 text-red-400 hover:bg-red-600/30 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Delete all content"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear All</span>
-                  </button>
-                )}
-
-                <button
-                  onClick={onLockAdmin}
-                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Lock Session
-                </button>
-              </div>
-            </div>
-
-            {/* Mode Switcher Tabs (Single vs Batch 10 Videos) */}
-            {!editingVideo && (
-              <div className="flex items-center gap-2 mb-5 p-1 bg-[#0e0e16] rounded-xl border border-white/10 max-w-md">
                 <button
                   type="button"
                   onClick={() => setActiveTab('single')}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                     activeTab === 'single'
-                      ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/20'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   }`}
                 >
-                  <FileVideo className="w-3.5 h-3.5" />
-                  <span>Single Video</span>
+                  <PlusCircle className="w-4 h-4" />
+                  <span>{editingVideo ? 'Edit Video' : 'Single Video'}</span>
                 </button>
 
+                {!editingVideo && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('batch')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === 'batch'
+                        ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/20'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <Layers className="w-4 h-4" />
+                    <span>Batch Upload (10 Videos)</span>
+                  </button>
+                )}
+              </div>
+
+              {onDeleteAllVideos && (
                 <button
                   type="button"
-                  onClick={() => setActiveTab('batch')}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'batch'
-                      ? 'bg-gradient-to-r from-amber-500 to-red-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={() => {
+                    if (confirm('Are you sure you want to clear ALL videos from Firestore?')) {
+                      onDeleteAllVideos();
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
                 >
-                  <Layers className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Add 10 Videos at Once</span>
-                  <span className="px-1.5 py-0.2 bg-amber-400 text-black text-[9px] rounded-full font-black">
-                    10X
-                  </span>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear All</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* ---------------- SINGLE VIDEO MODE ---------------- */}
+            {/* TAB 1: SINGLE VIDEO FORM */}
             {activeTab === 'single' ? (
               <form onSubmit={handleSingleSubmit} className="space-y-4">
+                {/* URL Input with Auto Parser */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Video Stream URL or Iframe Embed Code *
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={urlInput}
+                      onChange={(e) => handleUrlChange(e.target.value)}
+                      placeholder="Paste MP4, m3u8, YouTube, XVideos, Pornhub, Spankbang, or <iframe>..."
+                      className="flex-1 h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-mono"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={handleFetchThumbnail}
+                      className="px-3.5 rounded-xl border border-slate-200 hover:bg-orange-50 hover:border-orange-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Auto Extract Thumbnail"
+                    >
+                      <Sparkles className="w-4 h-4 text-orange-500" />
+                      <span className="hidden sm:inline">Auto Parse</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Video Title */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                    Video Title *
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Video Title
                   </label>
                   <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Enter custom video title (e.g., HD Amateur Hot Scene #1)"
-                    className="w-full px-4 py-2.5 rounded-xl bg-[#1c1c28] border border-white/10 text-white placeholder-slate-500 text-sm font-semibold focus:outline-none focus:border-red-500"
-                    required
+                    placeholder="Enter engaging descriptive title..."
+                    className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                   />
                 </div>
 
-                {/* Video URL or Embed Code */}
+                {/* Thumbnail Image URL & File Upload */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                    Video URL or &lt;iframe&gt; Embed Code *
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Thumbnail Image (URL or File Upload)
                   </label>
-                  <textarea
-                    value={urlInput}
-                    onChange={(e) => handleUrlChange(e.target.value)}
-                    placeholder="Paste direct MP4 URL, YouTube, Vimeo, Pornhub, XVideos, SpankBang, or <iframe> embed snippet..."
-                    rows={2}
-                    className="w-full px-4 py-2.5 rounded-xl bg-[#1c1c28] border border-white/10 text-white placeholder-slate-500 text-sm font-mono focus:outline-none focus:border-red-500"
-                    required
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={thumbnail}
+                        onChange={(e) => setThumbnail(e.target.value)}
+                        placeholder="https://... image url or auto-parsed"
+                        className="flex-1 h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-mono focus:border-orange-500 focus:bg-white focus:outline-none"
+                      />
+                      <label className="h-11 px-3.5 rounded-xl border border-slate-200 hover:bg-orange-50 hover:border-orange-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0">
+                        <Upload className="w-3.5 h-3.5 text-orange-500" />
+                        <span>Upload</span>
+                        <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                      </label>
+                    </div>
+
+                    {/* Thumbnail Preview Card */}
+                    <div className="relative aspect-video rounded-xl bg-slate-900 overflow-hidden border border-slate-200 flex items-center justify-center">
+                      {thumbnail ? (
+                        <img
+                          src={thumbnail}
+                          alt="Preview"
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                          onError={() => setThumbnail('')}
+                        />
+                      ) : (
+                        <div className="text-center p-2 text-slate-400 text-xs flex flex-col items-center">
+                          <ImageIcon className="w-5 h-5 mb-1 text-slate-500" />
+                          <span>No Preview</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Duration & Stats Randomizer Section */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Duration, Category, and Feature Switch */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
-                      Duration (e.g. 18:42)
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Duration
                     </label>
                     <input
                       type="text"
                       value={duration}
                       onChange={(e) => setDuration(e.target.value)}
-                      placeholder="e.g. 18:42"
-                      className="w-full px-4 py-2.5 rounded-xl bg-[#1c1c28] border border-white/10 text-white text-sm focus:outline-none focus:border-red-500 font-mono"
+                      placeholder="e.g. 18:45"
+                      className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono focus:border-orange-500 focus:bg-white focus:outline-none"
                     />
                   </div>
 
-                  {/* Views & Like % Randomizer Preview */}
-                  <div className="p-2.5 rounded-xl bg-[#181824] border border-white/10 flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 mb-1">
-                      <span>Randomized Metrics</span>
-                      <button
-                        type="button"
-                        onClick={rerollSingleStats}
-                        className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
-                        title="Reroll Views and Likes"
-                      >
-                        <Dice5 className="w-3.5 h-3.5" />
-                        <span>Reroll</span>
-                      </button>
-                    </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Category
+                    </label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value as VideoCategory)}
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold focus:border-orange-500 focus:bg-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="HD Videos">HD Videos</option>
+                      <option value="Trending">Trending</option>
+                      <option value="Amateur">Amateur</option>
+                      <option value="Solo">Solo</option>
+                      <option value="Hardcore">Hardcore</option>
+                      <option value="VR & 4K">VR & 4K</option>
+                    </select>
+                  </div>
 
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="flex items-center gap-1 font-mono text-slate-200">
-                        <Eye className="w-3.5 h-3.5 text-red-400" />
-                        {formatViews(singleViews || 200_000)} views (200k - 10M)
-                      </span>
-                      <span className="flex items-center gap-1 font-mono text-amber-400 font-bold">
-                        <Heart className="w-3.5 h-3.5 fill-amber-400" />
-                        {singleLikePercentage}% rating
-                      </span>
-                    </div>
+                  <div className="flex items-center pt-6">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isFeatured}
+                        onChange={(e) => setIsFeatured(e.target.checked)}
+                        className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 border-slate-300"
+                      />
+                      <span className="text-xs font-bold text-slate-700">Feature as Top Banner</span>
+                    </label>
                   </div>
                 </div>
 
-                {/* Thumbnail Section */}
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Video Thumbnail</span>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-semibold border border-amber-500/30">
-                      Local Upload &amp; Auto-Fetch
+                {/* Stats Settings (200k - 10M Views & Likes) */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                      Realistic Portal Stats (Auto Generated)
                     </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <label className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white text-xs font-bold cursor-pointer shadow-md transition-all">
-                      <Upload className="w-4 h-4" />
-                      <span>Upload Local Image File</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-
                     <button
                       type="button"
-                      onClick={handleFetchThumbnail}
-                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition-colors cursor-pointer"
+                      onClick={rerollSingleStats}
+                      className="text-xs text-orange-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
                     >
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      <span>Auto-Fetch from Video Link</span>
+                      <RefreshCw className="w-3 h-3" /> Re-roll
                     </button>
                   </div>
 
-                  {/* Thumbnail Preview */}
-                  {thumbnail ? (
-                    <div className="relative w-full h-36 rounded-xl overflow-hidden border border-amber-500/30 bg-black shadow-lg">
-                      <img
-                        src={thumbnail}
-                        alt="Thumbnail preview"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-slate-500 block mb-1">Views Count</span>
+                      <input
+                        type="number"
+                        value={singleViews}
+                        onChange={(e) => setSingleViews(parseInt(e.target.value) || 0)}
+                        className="w-full h-9 px-3 rounded-lg bg-white border border-slate-200 font-mono text-slate-800 text-xs"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end justify-between p-2.5">
-                        <span className="px-2 py-1 rounded-md bg-amber-500/90 backdrop-blur-md text-black font-bold text-[10px] flex items-center gap-1">
-                          {thumbnail.startsWith('data:image/') ? (
-                            <>
-                              <Upload className="w-3 h-3" />
-                              <span>Uploaded Local File</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-3 h-3" />
-                              <span>Video Link Thumbnail</span>
-                            </>
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setThumbnail('')}
-                          className="p-1 rounded bg-black/60 hover:bg-red-600 text-white transition-colors"
-                          title="Remove thumbnail"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
                     </div>
-                  ) : (
-                    <div className="w-full h-20 rounded-xl border border-dashed border-white/20 flex flex-col items-center justify-center text-slate-500 text-xs gap-1 bg-black/30">
-                      <ImageIcon className="w-4 h-4 text-slate-600" />
-                      <span>Upload local image or auto-fetch from link</span>
+                    <div>
+                      <span className="text-slate-500 block mb-1">Like Ratio (%)</span>
+                      <input
+                        type="number"
+                        min="50"
+                        max="100"
+                        value={singleLikePercentage}
+                        onChange={(e) => setSingleLikePercentage(parseInt(e.target.value) || 97)}
+                        className="w-full h-9 px-3 rounded-lg bg-white border border-slate-200 font-mono text-slate-800 text-xs"
+                      />
                     </div>
-                  )}
-                </div>
-
-                {/* Featured Checkbox */}
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="featuredCheck"
-                    checked={isFeatured}
-                    onChange={(e) => setIsFeatured(e.target.checked)}
-                    className="w-4 h-4 rounded bg-[#1c1c28] border-white/20 text-red-600 focus:ring-red-500 cursor-pointer"
-                  />
-                  <label htmlFor="featuredCheck" className="text-xs font-semibold text-slate-200 cursor-pointer">
-                    Feature this video in top Hero Banner
-                  </label>
+                  </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="pt-3 flex items-center gap-3">
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 py-3 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 hover:from-red-500 hover:to-orange-400 shadow-lg shadow-red-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold shadow-md shadow-orange-500/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {isSubmitting ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Publishing...</span>
+                      </>
                     ) : (
-                      <PlusCircle className="w-5 h-5" />
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>{editingVideo ? 'Update Video' : 'Publish Live to Catalog'}</span>
+                      </>
                     )}
-                    <span>{editingVideo ? 'Save Changes' : 'Publish Video Live'}</span>
-                  </button>
-
-                  {editingVideo && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onDeleteVideo(editingVideo.id);
-                        resetForm();
-                        onClose();
-                      }}
-                      className="py-3 px-4 rounded-xl font-bold text-white bg-red-600/80 hover:bg-red-600 border border-red-500 text-sm transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
-                      title="Delete this video"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Delete</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetForm();
-                      onClose();
-                    }}
-                    className="py-3 px-5 rounded-xl font-medium text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 text-sm transition-colors cursor-pointer"
-                  >
-                    Cancel
                   </button>
                 </div>
               </form>
             ) : (
-              /* ---------------- BATCH ADD 10 VIDEOS MODE ---------------- */
+              /* TAB 2: BATCH 10-SLOT UPLOADER */
               <form onSubmit={handleBatchSubmit} className="space-y-4">
-                {/* Batch Top Bar Tools */}
-                <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-[#181824] rounded-xl border border-white/10">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-orange-50 border border-orange-200 rounded-xl">
                   <div>
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Layers className="w-4 h-4 text-amber-400" />
-                      <span>Batch 10 Videos Slot Manager</span>
-                    </span>
-                    <p className="text-[11px] text-slate-400">
-                      Fill individual titles and links for up to 10 videos. All videos will receive randomized 200k-10M views and 90-99% like percentage.
+                    <h4 className="text-xs font-bold text-orange-950 uppercase">
+                      Fast Multi-Video Batch Publisher (10 Slots)
+                    </h4>
+                    <p className="text-[11px] text-orange-800">
+                      Paste links into slots below or use Quick Multi-Paste to populate multiple slots instantly.
                     </p>
                   </div>
-
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={rerollAllBatchStats}
-                      className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                      title="Reroll stats for all 10 slots"
+                      onClick={() => setShowQuickPaste(!showQuickPaste)}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-orange-300 hover:bg-orange-100 text-orange-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      <Dice5 className="w-3.5 h-3.5" />
-                      <span>Reroll All Stats</span>
+                      <Layers className="w-3.5 h-3.5 text-orange-500" />
+                      <span>{showQuickPaste ? 'Hide Quick Paste' : 'Quick Multi-Paste'}</span>
                     </button>
-
                     <button
                       type="button"
-                      onClick={() => setShowQuickPaste(!showQuickPaste)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      onClick={rerollAllBatchStats}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-orange-300 hover:bg-orange-100 text-orange-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Quick Multi-Paste</span>
+                      <RefreshCw className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Randomize All Stats</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Quick Paste Modal/Accordion */}
+                {/* Quick Paste Modal / Accordion */}
                 {showQuickPaste && (
-                  <div className="p-3.5 rounded-xl bg-[#1c1c28] border border-amber-500/40 space-y-2 animate-fade-in">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                        Quick Paste Up to 10 Video URLs (One per line)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowQuickPaste(false)}
-                        className="text-slate-400 hover:text-white"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Paste Up to 10 Video Links (One Per Line):
+                    </label>
                     <textarea
+                      rows={4}
                       value={quickPasteText}
                       onChange={(e) => setQuickPasteText(e.target.value)}
-                      placeholder="https://example.com/video1.mp4&#10;https://www.youtube.com/watch?v=...&#10;https://www.pornhub.com/view_video.php?viewkey=...&#10;<iframe>...</iframe>"
-                      rows={4}
-                      className="w-full px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-xs font-mono placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                      placeholder="https://example.com/stream1.mp4&#10;https://youtube.com/watch?v=...&#10;https://xvideos.com/video123"
+                      className="w-full p-3 rounded-lg bg-white border border-slate-200 font-mono text-xs text-slate-900 focus:border-orange-500 focus:outline-none"
                     />
-
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={handleQuickPasteProcess}
-                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-red-600 text-white text-xs font-bold shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                        className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold cursor-pointer"
                       >
-                        Auto-Populate 10 Slots
+                        Load Into Batch Slots
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* 10 Video Slot Items */}
+                {/* 10 Batch Slots Grid */}
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {batchSlots.map((slot, index) => (
                     <div
                       key={slot.id}
-                      className={`p-3.5 rounded-xl border transition-all ${
-                        slot.url.trim()
-                          ? 'bg-[#181826] border-red-500/30'
-                          : 'bg-[#14141e] border-white/10 opacity-80 hover:opacity-100'
-                      }`}
+                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center gap-3"
                     >
-                      {/* Slot Header */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-red-600/30 border border-red-500/40 text-red-400 font-mono font-bold text-xs">
-                            Slot #{index + 1}
-                          </span>
-                          <span className="text-xs font-bold text-slate-300">
-                            {slot.title || `Video Item ${index + 1}`}
-                          </span>
-                        </div>
+                      <span className="w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                        {index + 1}
+                      </span>
 
-                        {/* Randomized Stats Badge */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/50 text-slate-300 border border-white/5 flex items-center gap-1">
-                            <Eye className="w-3 h-3 text-red-400" />
-                            {formatViews(slot.views)}
-                          </span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 flex items-center gap-1">
-                            <Heart className="w-3 h-3 fill-amber-400" />
-                            {slot.likePercentage}% likes
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => rerollBatchSlotStats(index)}
-                            className="p-1 text-slate-400 hover:text-amber-400 transition-colors"
-                            title="Reroll this slot's views and likes"
-                          >
-                            <Dice5 className="w-3 h-3" />
-                          </button>
-                        </div>
+                      {/* Video Link */}
+                      <div className="flex-1 w-full">
+                        <input
+                          type="text"
+                          value={slot.url}
+                          onChange={(e) => handleBatchSlotUrlChange(index, e.target.value)}
+                          placeholder="Paste video stream link or embed code..."
+                          className="w-full h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs font-mono text-slate-900 focus:border-orange-500 focus:outline-none"
+                        />
                       </div>
 
-                      {/* Inputs Grid for each slot */}
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                        {/* Custom Title Input */}
-                        <div className="md:col-span-4">
-                          <input
-                            type="text"
-                            value={slot.title}
-                            onChange={(e) => updateBatchSlot(index, 'title', e.target.value)}
-                            placeholder={`Title for Video #${index + 1}`}
-                            className="w-full px-3 py-2 rounded-lg bg-[#0e0e16] border border-white/10 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500"
-                          />
-                        </div>
+                      {/* Video Title */}
+                      <div className="w-full sm:w-44">
+                        <input
+                          type="text"
+                          value={slot.title}
+                          onChange={(e) => updateBatchSlot(index, 'title', e.target.value)}
+                          placeholder="Video title..."
+                          className="w-full h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-900 focus:border-orange-500 focus:outline-none"
+                        />
+                      </div>
 
-                        {/* URL or Embed Input */}
-                        <div className="md:col-span-5">
-                          <input
-                            type="text"
-                            value={slot.url}
-                            onChange={(e) => handleBatchSlotUrlChange(index, e.target.value)}
-                            placeholder="Video URL or Embed Code..."
-                            className="w-full px-3 py-2 rounded-lg bg-[#0e0e16] border border-white/10 text-white text-xs font-mono placeholder-slate-500 focus:outline-none focus:border-red-500"
-                          />
-                        </div>
+                      {/* Duration */}
+                      <div className="w-full sm:w-24">
+                        <input
+                          type="text"
+                          value={slot.duration}
+                          onChange={(e) => updateBatchSlot(index, 'duration', e.target.value)}
+                          placeholder="15:20"
+                          className="w-full h-9 px-2 text-center rounded-lg bg-white border border-slate-200 text-xs font-mono text-slate-900 focus:border-orange-500 focus:outline-none"
+                        />
+                      </div>
 
-                        {/* Duration Input */}
-                        <div className="md:col-span-3 flex items-center gap-1.5">
+                      {/* Thumbnail Upload & Preview */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <label className="h-9 px-2 rounded-lg border border-slate-200 bg-white hover:bg-orange-50 text-slate-600 text-xs flex items-center gap-1 cursor-pointer">
+                          <Upload className="w-3 h-3 text-orange-500" />
+                          <span className="text-[10px]">Thumb</span>
                           <input
-                            type="text"
-                            value={slot.duration}
-                            onChange={(e) => updateBatchSlot(index, 'duration', e.target.value)}
-                            placeholder="15:20"
-                            className="w-16 px-2 py-2 rounded-lg bg-[#0e0e16] border border-white/10 text-white text-xs font-mono text-center focus:outline-none focus:border-red-500"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleBatchSlotFileUpload(index, e)}
+                            className="hidden"
                           />
+                        </label>
 
-                          {/* Local Thumbnail Upload for slot */}
-                          <label className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white cursor-pointer transition-colors" title="Upload local image">
-                            <Upload className="w-3.5 h-3.5" />
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleBatchSlotFileUpload(index, e)}
-                              className="hidden"
+                        {slot.thumbnail && (
+                          <div className="w-9 h-9 rounded bg-slate-900 overflow-hidden border border-slate-200 flex items-center justify-center">
+                            <img
+                              src={slot.thumbnail}
+                              alt="Thumb"
+                              className="w-full h-full object-contain"
+                              referrerPolicy="no-referrer"
                             />
-                          </label>
-
-                          {/* Clear Slot */}
-                          {slot.url && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const stats = generateRandomStats();
-                                setBatchSlots((prev) => {
-                                  const updated = [...prev];
-                                  updated[index] = {
-                                    ...createEmptyBatchSlot(index),
-                                    views: stats.views,
-                                    likes: stats.likes,
-                                    likePercentage: stats.likePercentage,
-                                  };
-                                  return updated;
-                                });
-                              }}
-                              className="p-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
-                              title="Clear slot"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-
-                      {/* Thumbnail Preview if present */}
-                      {slot.thumbnail && (
-                        <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-400">
-                          <img
-                            src={slot.thumbnail}
-                            alt=""
-                            className="w-10 h-6 object-cover rounded border border-white/10"
-                          />
-                          <span className="truncate max-w-xs font-mono text-slate-300">
-                            Thumbnail active
-                          </span>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
 
                 {/* Batch Action Buttons */}
-                <div className="pt-2 flex items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="flex-1 py-3 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 hover:from-red-500 hover:to-orange-400 shadow-lg shadow-red-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSubmitting ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <PlusCircle className="w-5 h-5" />
-                    )}
-                    <span>
-                      Publish All Filled Videos (
-                      {batchSlots.filter((s) => s.url.trim().length > 0).length} / 10)
-                    </span>
-                  </button>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                  <span className="text-xs text-slate-500">
+                    {batchSlots.filter((s) => s.url.trim().length > 0).length} of 10 slots filled
+                  </span>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetForm();
-                      onClose();
-                    }}
-                    className="py-3 px-5 rounded-xl font-medium text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 text-sm transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-6 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold shadow-md shadow-orange-500/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Publishing Batch...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Publish All Filled Slots</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
@@ -1006,4 +923,3 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     </div>
   );
 };
-

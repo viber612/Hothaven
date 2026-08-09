@@ -1,21 +1,30 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, doc } from 'firebase/firestore';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App safely
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore safely using specified databaseId if present
+// Initialize Firestore safely using specified databaseId and auto-detect long polling
 let db: ReturnType<typeof getFirestore>;
+const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
+
 try {
-  if (firebaseConfig.firestoreDatabaseId) {
-    db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-  } else {
+  // Use experimentalAutoDetectLongPolling to ensure reliable connections in iframe/proxy environments
+  db = initializeFirestore(
+    app,
+    {
+      experimentalAutoDetectLongPolling: true,
+    },
+    databaseId
+  );
+} catch {
+  try {
+    db = getFirestore(app, databaseId);
+  } catch (e) {
+    console.warn('Fallback to default Firestore database instance:', e);
     db = getFirestore(app);
   }
-} catch (e) {
-  console.warn('Fallback to default Firestore database', e);
-  db = getFirestore(app);
 }
 
 /**
@@ -36,3 +45,4 @@ export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Rec
 }
 
 export { app, db };
+

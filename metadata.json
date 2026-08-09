@@ -1,6 +1,6 @@
 {
   "name": "HOT HAVEN",
-  "description": "A modern, high-performance 18+ adult video streaming and content management portal with real-time Firestore sync, secret admin panel, auto-parsing video sources, age gate verification, and dark luxury design.",
+  "description": "A high-performance 18+ adult video streaming and content catalog with a clean white and orange interface, full SEO optimization for Google Search, real-time Firestore sync, secret admin panel, auto-parsed video streams, and responsive playback.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
