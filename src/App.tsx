@@ -48,7 +48,11 @@ const CATEGORIES: VideoCategory[] = [
 export default function App() {
   // 1. Age Gate State
   const [isAgeVerified, setIsAgeVerified] = useState<boolean>(() => {
-    return localStorage.getItem('hothaven_age_verified') === 'true';
+    try {
+      return localStorage.getItem('hothaven_age_verified') === 'true';
+    } catch {
+      return false;
+    }
   });
   const [showAgeGateModal, setShowAgeGateModal] = useState<boolean>(!isAgeVerified);
 
@@ -70,7 +74,11 @@ export default function App() {
 
   // 5. Admin Authentication State
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return sessionStorage.getItem('hothaven_admin_auth') === 'true';
+    try {
+      return sessionStorage.getItem('hothaven_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
   });
 
   // 6. Bookmarks State
@@ -119,12 +127,20 @@ export default function App() {
 
   // Save Bookmarks to Local Storage
   useEffect(() => {
-    localStorage.setItem('hothaven_bookmarks', JSON.stringify(bookmarkedIds));
+    try {
+      localStorage.setItem('hothaven_bookmarks', JSON.stringify(bookmarkedIds));
+    } catch (e) {
+      console.warn('Unable to persist bookmarks:', e);
+    }
   }, [bookmarkedIds]);
 
   // Save Liked IDs to Local Storage
   useEffect(() => {
-    localStorage.setItem('hothaven_liked_videos', JSON.stringify(likedIds));
+    try {
+      localStorage.setItem('hothaven_liked_videos', JSON.stringify(likedIds));
+    } catch (e) {
+      console.warn('Unable to persist liked videos:', e);
+    }
   }, [likedIds]);
 
   // Prevent background body scrolling when any overlay/modal/drawer is open
@@ -151,7 +167,11 @@ export default function App() {
 
   // Handle Age Verification
   const handleConfirmAge = () => {
-    localStorage.setItem('hothaven_age_verified', 'true');
+    try {
+      localStorage.setItem('hothaven_age_verified', 'true');
+    } catch (e) {
+      console.warn('Unable to persist age verification:', e);
+    }
     setIsAgeVerified(true);
     setShowAgeGateModal(false);
     showToast('Age verified! Welcome to HOT HAVEN.', 'success');
@@ -160,7 +180,11 @@ export default function App() {
   // Handle Admin PIN Authentication
   const handleAuthenticateAdmin = (pin: string) => {
     if (pin.trim() === DEFAULT_ADMIN_PIN) {
-      sessionStorage.setItem('hothaven_admin_auth', 'true');
+      try {
+        sessionStorage.setItem('hothaven_admin_auth', 'true');
+      } catch (e) {
+        console.warn('Unable to persist admin session:', e);
+      }
       setIsAdmin(true);
       return true;
     }
@@ -168,7 +192,11 @@ export default function App() {
   };
 
   const handleLockAdmin = () => {
-    sessionStorage.removeItem('hothaven_admin_auth');
+    try {
+      sessionStorage.removeItem('hothaven_admin_auth');
+    } catch (e) {
+      console.warn('Unable to clear admin session:', e);
+    }
     setIsAdmin(false);
     showToast('Admin Session Locked', 'info');
   };
