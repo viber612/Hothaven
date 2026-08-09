@@ -3,27 +3,37 @@ import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App safely
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+let app: any = null;
+try {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+} catch (e) {
+  console.warn('Firebase app initialization fallback:', e);
+}
 
 // Initialize Firestore safely using specified databaseId and auto-detect long polling
-let db: ReturnType<typeof getFirestore>;
-const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
+let db: any = null;
+const databaseId = (firebaseConfig as any)?.firestoreDatabaseId || undefined;
 
-try {
-  // Use experimentalAutoDetectLongPolling to ensure reliable connections in iframe/proxy environments
-  db = initializeFirestore(
-    app,
-    {
-      experimentalAutoDetectLongPolling: true,
-    },
-    databaseId
-  );
-} catch {
+if (app) {
   try {
-    db = getFirestore(app, databaseId);
-  } catch (e) {
-    console.warn('Fallback to default Firestore database instance:', e);
-    db = getFirestore(app);
+    // Use experimentalAutoDetectLongPolling to ensure reliable connections in iframe/proxy environments
+    db = initializeFirestore(
+      app,
+      {
+        experimentalAutoDetectLongPolling: true,
+      },
+      databaseId
+    );
+  } catch {
+    try {
+      db = getFirestore(app, databaseId);
+    } catch {
+      try {
+        db = getFirestore(app);
+      } catch (e) {
+        console.warn('Firestore instance not available:', e);
+      }
+    }
   }
 }
 

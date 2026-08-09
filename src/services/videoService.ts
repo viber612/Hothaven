@@ -41,65 +41,76 @@ export function subscribeToVideos(callback: (videos: VideoItem[]) => void): () =
     callback(initialCache);
   }
 
-  const colRef = collection(db, COLLECTION_NAME);
+  if (!db) {
+    callback(initialCache);
+    return () => {};
+  }
 
-  const unsubscribe = onSnapshot(
-    colRef,
-    (snapshot) => {
-      if (snapshot.empty) {
-        setLocalCachedVideos([]);
-        callback([]);
-        return;
-      }
+  try {
+    const colRef = collection(db, COLLECTION_NAME);
 
-      const videos: VideoItem[] = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        let views = typeof data.views === 'number' ? data.views : 0;
-        let likes = typeof data.likes === 'number' ? data.likes : 0;
-        let likePercentage = typeof data.likePercentage === 'number' ? data.likePercentage : 0;
-
-        // If a video has 0 or unassigned views, apply realistic randomized views (200K - 10M) and like %
-        if (views < 200_000) {
-          const stats = generateRandomStats();
-          views = stats.views;
-          likePercentage = stats.likePercentage;
-          likes = stats.likes;
-        } else if (!likePercentage || likePercentage <= 0) {
-          likePercentage = getLikePercentage({ views, likes });
+    const unsubscribe = onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (snapshot.empty) {
+          setLocalCachedVideos([]);
+          callback([]);
+          return;
         }
 
-        return {
-          id: docSnap.id,
-          title: data.title || 'Untitled Video',
-          url: data.url || '',
-          embedUrl: data.embedUrl || data.url || '',
-          videoType: data.videoType || 'embed',
-          provider: data.provider || 'Web Stream',
-          thumbnail: data.thumbnail || '',
-          category: data.category || 'HD Videos',
-          duration: data.duration || '',
-          views,
-          likes,
-          likePercentage,
-          isFeatured: Boolean(data.isFeatured),
-          createdAt: data.createdAt || new Date().toISOString(),
-        };
-      });
+        const videos: VideoItem[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          let views = typeof data.views === 'number' ? data.views : 0;
+          let likes = typeof data.likes === 'number' ? data.likes : 0;
+          let likePercentage = typeof data.likePercentage === 'number' ? data.likePercentage : 0;
 
-      // Sort by createdAt descending
-      videos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          // If a video has 0 or unassigned views, apply realistic randomized views (200K - 10M) and like %
+          if (views < 200_000) {
+            const stats = generateRandomStats();
+            views = stats.views;
+            likePercentage = stats.likePercentage;
+            likes = stats.likes;
+          } else if (!likePercentage || likePercentage <= 0) {
+            likePercentage = getLikePercentage({ views, likes });
+          }
 
-      setLocalCachedVideos(videos);
-      callback(videos);
-    },
-    (error) => {
-      console.warn('Firestore subscription notice (using offline cache):', error?.message || error);
-      const fallback = getLocalCachedVideos();
-      callback(fallback);
-    }
-  );
+          return {
+            id: docSnap.id,
+            title: data.title || 'Untitled Video',
+            url: data.url || '',
+            embedUrl: data.embedUrl || data.url || '',
+            videoType: data.videoType || 'embed',
+            provider: data.provider || 'Web Stream',
+            thumbnail: data.thumbnail || '',
+            category: data.category || 'HD Videos',
+            duration: data.duration || '',
+            views,
+            likes,
+            likePercentage,
+            isFeatured: Boolean(data.isFeatured),
+            createdAt: data.createdAt || new Date().toISOString(),
+          };
+        });
 
-  return unsubscribe;
+        // Sort by createdAt descending
+        videos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        setLocalCachedVideos(videos);
+        callback(videos);
+      },
+      (error) => {
+        console.warn('Firestore subscription notice (using offline cache):', error?.message || error);
+        const fallback = getLocalCachedVideos();
+        callback(fallback);
+      }
+    );
+
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Unable to subscribe to Firestore, using offline cache:', err);
+    callback(initialCache);
+    return () => {};
+  }
 }
 
 export async function seedDefaultVideos(): Promise<void> {
