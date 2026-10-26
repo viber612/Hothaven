@@ -1,23 +1,11 @@
 import React from 'react';
-import {
-  Play,
-  Eye,
-  Heart,
-  Bookmark,
-  Share2,
-  Edit2,
-  Trash2,
-  Sparkles,
-} from 'lucide-react';
+import { Play, Edit2, Trash2 } from 'lucide-react';
 import { VideoItem } from '../types/video';
 import { formatViews, getLikePercentage } from '../utils/formatters';
 
 interface VideoCardProps {
   video: VideoItem;
   onSelect: (video: VideoItem) => void;
-  isBookmarked: boolean;
-  onToggleBookmark: (video: VideoItem) => void;
-  onShare: (video: VideoItem) => void;
   isAdmin: boolean;
   onEdit?: (video: VideoItem) => void;
   onDelete?: (id: string) => void;
@@ -26,9 +14,6 @@ interface VideoCardProps {
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
   onSelect,
-  isBookmarked,
-  onToggleBookmark,
-  onShare,
   isAdmin,
   onEdit,
   onDelete,
@@ -38,63 +23,45 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   return (
     <article
       id={`video-card-${video.id}`}
-      className="group relative bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-orange-400 transition-all duration-200 hover:shadow-lg flex flex-col"
+      className="group relative bg-white border border-black flex flex-col rounded-none"
       itemScope
       itemType="https://schema.org/VideoObject"
     >
       <meta itemProp="name" content={video.title || 'HD Adult Video'} />
-      <meta itemProp="description" content={`Watch ${video.title || 'HD video'} on HOT HAVEN.`} />
+      <meta itemProp="description" content={`Watch ${video.title || 'HD video'} on HOTHAVEN.`} />
       <meta itemProp="thumbnailUrl" content={video.thumbnail} />
       <meta itemProp="uploadDate" content={new Date(video.createdAt || Date.now()).toISOString()} />
       {video.duration && <meta itemProp="duration" content={video.duration} />}
 
-      {/* Thumbnail Container */}
+      {/* Thumbnail Container (Sharp Square Corners) */}
       <div
-        className="relative aspect-video w-full bg-slate-900 overflow-hidden cursor-pointer flex items-center justify-center"
+        className="relative aspect-video w-full bg-black overflow-hidden cursor-pointer flex items-center justify-center rounded-none"
         onClick={() => onSelect(video)}
       >
-        <img
-          src={video.thumbnail}
-          alt={video.title || 'Video Thumbnail'}
-          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            // Fallback placeholder with clean orange badge
-            const target = e.target as HTMLElement;
-            target.style.display = 'none';
-          }}
-        />
+        {video.thumbnail ? (
+          <img
+            src={video.thumbnail}
+            alt={video.title || 'Video Thumbnail'}
+            className="w-full h-full object-contain"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.target as HTMLElement;
+              target.style.display = 'none';
+            }}
+          />
+        ) : null}
 
-        {/* Subtle Bottom Gradient for Duration Contrast */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-80 group-hover:opacity-90 transition-opacity"></div>
-
-        {/* Clean Play Icon Center Hover */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-11 h-11 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-lg transform scale-90 opacity-0 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200">
-            <Play className="w-5 h-5 fill-orange-600 ml-0.5" />
+        {/* Play Icon Hover Overlay */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/0 group-hover:bg-black/30 transition-colors">
+          <div className="w-10 h-10 bg-white text-black border border-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Play className="w-4 h-4 fill-black ml-0.5" />
           </div>
         </div>
 
-        {/* Top Badges */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-          <div className="flex items-center gap-1.5">
-            {video.isFeatured && (
-              <span className="px-2 py-0.5 rounded-md bg-orange-500 text-white text-[10px] font-bold uppercase flex items-center gap-1 shadow-sm">
-                <Sparkles className="w-3 h-3 text-white" /> HOT
-              </span>
-            )}
-            {video.provider && (
-              <span className="px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-sm text-slate-200 text-[10px] font-medium uppercase font-mono">
-                {video.provider}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Duration Badge */}
+        {/* Duration Text Overlay */}
         {video.duration && (
-          <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-sm text-white text-[10px] font-bold font-mono">
+          <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black text-white text-[11px] font-bold font-mono tabular-nums">
             {video.duration}
           </div>
         )}
@@ -102,85 +69,54 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
       {/* Card Body - Video Title */}
       <div
-        className="px-3.5 pt-3 pb-1 bg-white cursor-pointer"
+        className="px-3 pt-3 pb-1.5 bg-white cursor-pointer"
         onClick={() => onSelect(video)}
       >
-        <h3 className="text-sm font-bold text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-2 leading-snug">
+        <h3 className="text-sm font-bold text-black group-hover:underline line-clamp-2 leading-snug">
           {video.title || 'HD Video Stream'}
         </h3>
       </div>
 
-      {/* Card Info Details (Views & Likes in Percentage) */}
-      <div className="p-3.5 pt-1.5 flex items-center justify-between text-xs text-slate-500 bg-white mt-auto">
-        <div className="flex items-center gap-2.5 font-medium">
-          <span className="flex items-center gap-1 text-slate-600 font-mono text-[11px]">
-            <Eye className="w-3.5 h-3.5 text-orange-500" />
-            <span>{formatViews(video.views)}</span>
-          </span>
-
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 font-bold text-[11px] font-mono border border-orange-100">
-            <Heart className="w-3 h-3 fill-orange-500 text-orange-500" />
-            <span>{likePct}%</span>
-          </span>
+      {/* Card Footer - Unboxed Metadata & Admin Controls */}
+      <div className="px-3 pb-3 pt-1 flex items-center justify-between text-xs text-black/70 bg-white mt-auto font-mono tabular-nums">
+        <div className="flex items-center gap-1.5">
+          <span>{formatViews(video.views)} views</span>
+          <span aria-hidden="true">·</span>
+          <span className="font-bold text-black">{likePct}%</span>
         </div>
 
-        {/* Quick Action Controls */}
-        <div className="flex items-center gap-1">
-          <button
-            id={`bookmark-btn-${video.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleBookmark(video);
-            }}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isBookmarked
-                ? 'bg-orange-500 text-white'
-                : 'text-slate-400 hover:text-orange-500 hover:bg-orange-50'
-            }`}
-            title={isBookmarked ? 'Remove Bookmark' : 'Save to Bookmarks'}
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            id={`share-btn-${video.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onShare(video);
-            }}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-            title="Share Video"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-          </button>
-
-          {isAdmin && (
-            <div className="flex items-center gap-0.5 ml-1 pl-1 border-l border-slate-200">
-              <button
-                id={`edit-btn-${video.id}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onEdit) onEdit(video);
-                }}
-                className="p-1.5 rounded-lg text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer"
-                title="Edit Video"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                id={`delete-btn-${video.id}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onDelete && confirm('Delete this video?')) onDelete(video.id);
-                }}
-                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                title="Delete Video"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-1.5">
+            <button
+              id={`edit-btn-${video.id}`}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEdit?.(video);
+              }}
+              className="px-2 py-1 border border-black bg-white text-black hover:bg-black hover:text-white text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+              title="Edit Video"
+            >
+              <Edit2 className="w-3 h-3" />
+              <span>Edit</span>
+            </button>
+            <button
+              id={`delete-btn-${video.id}`}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete?.(video.id);
+              }}
+              className="px-2 py-1 border border-black bg-black text-white hover:bg-white hover:text-black text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+              title="Delete Video"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Delete</span>
+            </button>
+          </div>
+        )}
       </div>
     </article>
   );

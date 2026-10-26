@@ -1,32 +1,46 @@
-export function formatViews(views: number): string {
-  if (views >= 1_000_000) {
-    const val = (views / 1_000_000).toFixed(1);
+export function formatViews(views?: number | null): string {
+  const safeViews = typeof views === 'number' && Number.isFinite(views) ? views : 0;
+  if (safeViews >= 1_000_000) {
+    const val = (safeViews / 1_000_000).toFixed(1);
     return `${val.replace(/\.0$/, '')}M`;
   }
-  if (views >= 1_000) {
-    const val = (views / 1_000).toFixed(1);
+  if (safeViews >= 1_000) {
+    const val = (safeViews / 1_000).toFixed(1);
     return `${val.replace(/\.0$/, '')}K`;
   }
-  return views.toLocaleString();
+  return safeViews.toLocaleString();
 }
 
-export function formatLikes(likes: number): string {
-  if (likes >= 1_000_000) {
-    const val = (likes / 1_000_000).toFixed(1);
+export function formatLikes(likes?: number | null): string {
+  const safeLikes = typeof likes === 'number' && Number.isFinite(likes) ? likes : 0;
+  if (safeLikes >= 1_000_000) {
+    const val = (safeLikes / 1_000_000).toFixed(1);
     return `${val.replace(/\.0$/, '')}M`;
   }
-  if (likes >= 1_000) {
-    const val = (likes / 1_000).toFixed(1);
+  if (safeLikes >= 1_000) {
+    const val = (safeLikes / 1_000).toFixed(1);
     return `${val.replace(/\.0$/, '')}K`;
   }
-  return likes.toLocaleString();
+  return safeLikes.toLocaleString();
 }
 
-export function getLikePercentage(video: { views?: number; likes?: number; likePercentage?: number }): number {
-  if (typeof video.likePercentage === 'number' && video.likePercentage > 0 && video.likePercentage <= 100) {
+export function getLikePercentage(
+  video?: { views?: number; likes?: number; likePercentage?: number } | null
+): number {
+  if (!video || typeof video !== 'object') return 97;
+  if (
+    typeof video.likePercentage === 'number' &&
+    video.likePercentage > 0 &&
+    video.likePercentage <= 100
+  ) {
     return video.likePercentage;
   }
-  if (typeof video.views === 'number' && video.views > 0 && typeof video.likes === 'number' && video.likes > 0) {
+  if (
+    typeof video.views === 'number' &&
+    video.views > 0 &&
+    typeof video.likes === 'number' &&
+    video.likes > 0
+  ) {
     const pct = Math.round((video.likes / video.views) * 100);
     if (pct >= 50 && pct <= 100) return pct;
   }

@@ -33,7 +33,7 @@ import { ToastContainer } from './components/Toast';
 import { Footer } from './components/Footer';
 
 const ITEMS_PER_PAGE = 12;
-const DEFAULT_ADMIN_PIN = '8888';
+const DEFAULT_ADMIN_PIN = '040820062007';
 
 const CATEGORIES: VideoCategory[] = [
   'All',
@@ -309,7 +309,11 @@ export default function App() {
       showToast('Admin access required to publish videos', 'error');
       return;
     }
-    await addVideoToFirestore(videoData);
+    const created = await addVideoToFirestore(videoData);
+    setVideos((prev) => {
+      if (prev.some((v) => v.id === created.id)) return prev;
+      return [created, ...prev];
+    });
   };
 
   const handleBatchPublishVideos = async (
@@ -325,7 +329,12 @@ export default function App() {
       showToast('Admin access required to publish videos', 'error');
       return;
     }
-    await batchAddVideosToFirestore(videosData);
+    const createdList = await batchAddVideosToFirestore(videosData);
+    setVideos((prev) => {
+      const existingIds = new Set(prev.map((v) => v.id));
+      const newItems = createdList.filter((item) => !existingIds.has(item.id));
+      return [...newItems, ...prev];
+    });
   };
 
   const handleUpdateVideo = async (id: string, updates: Partial<VideoItem>) => {
@@ -333,6 +342,7 @@ export default function App() {
       showToast('Admin access required to edit videos', 'error');
       return;
     }
+    setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, ...updates } : v)));
     await updateVideoInFirestore(id, updates);
     setEditingVideo(null);
   };
@@ -343,14 +353,15 @@ export default function App() {
       return;
     }
     try {
-      await deleteVideoFromFirestore(id);
-      showToast('Video removed from catalog.', 'success');
+      setVideos((prev) => prev.filter((v) => v.id !== id));
       if (activePlayerVideo?.id === id) {
         setActivePlayerVideo(null);
       }
       if (editingVideo?.id === id) {
         setEditingVideo(null);
       }
+      await deleteVideoFromFirestore(id);
+      showToast('Video removed from catalog.', 'success');
     } catch (err) {
       console.error('Failed to delete video:', err);
       showToast('Error deleting video.', 'error');
@@ -362,6 +373,9 @@ export default function App() {
       showToast('Admin access required to clear videos', 'error');
       return;
     }
+    setVideos([]);
+    setActivePlayerVideo(null);
+    setEditingVideo(null);
     await deleteAllVideosFromFirestore();
     showToast('All videos wiped from catalog.', 'success');
   };
@@ -459,7 +473,7 @@ export default function App() {
               <h3 className="text-lg font-bold text-slate-900 mb-1">No Videos Found</h3>
               <p className="text-slate-500 text-sm max-w-md mx-auto mb-4">
                 {videos.length === 0
-                  ? 'No videos in catalog yet. Click the "Manage" button in the top right to authenticate (PIN: 8888) and add videos.'
+                  ? 'No videos are currently available in the catalog.'
                   : 'No video items match your search query or selected category.'}
               </p>
               {(searchQuery || selectedCategory !== 'All') && (
@@ -554,9 +568,11 @@ export default function App() {
         isAdmin={isAdmin}
         onAuthenticateAdmin={handleAuthenticateAdmin}
         onLockAdmin={handleLockAdmin}
+        videos={videos}
         onPublishVideo={handlePublishVideo}
         onBatchPublishVideos={handleBatchPublishVideos}
         editingVideo={editingVideo}
+        onSelectEditVideo={(v) => setEditingVideo(v)}
         onUpdateVideo={handleUpdateVideo}
         onDeleteVideo={handleDeleteVideo}
         onDeleteAllVideos={handleDeleteAllVideos}

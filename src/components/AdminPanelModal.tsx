@@ -109,6 +109,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [singleLikePercentage, setSingleLikePercentage] = useState(97);
   const [singleLikes, setSingleLikes] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingMeta, setIsFetchingMeta] = useState(false);
 
   // Batch Form Fields
   const [batchSlots, setBatchSlots] = useState<BatchVideoDraft[]>(() =>
@@ -178,8 +179,35 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const parsed = parseVideoUrl(val);
       const autoThumb = getAutoThumbnail(parsed, category);
       setThumbnail(autoThumb);
-      if (!title.trim()) {
+
+      if (parsed.suggestedTitle) {
+        setTitle(parsed.suggestedTitle);
+      } else if (!title.trim()) {
         setTitle(`Hot Video HD #${Math.floor(Math.random() * 900) + 100}`);
+      }
+
+      if (parsed.suggestedDuration) {
+        setDuration(parsed.suggestedDuration);
+      }
+
+      // Auto-fetch remote thumbnail, title, and duration from the video page
+      if (parsed.originalUrl && parsed.originalUrl.startsWith('http')) {
+        setIsFetchingMeta(true);
+        fetchRemoteVideoMetadata(val)
+          .then((meta) => {
+            if (meta.thumbnail) {
+              setThumbnail(meta.thumbnail);
+            }
+            if (meta.title) {
+              setTitle(meta.title);
+            }
+            if (meta.duration) {
+              setDuration(meta.duration);
+            }
+          })
+          .finally(() => {
+            setIsFetchingMeta(false);
+          });
       }
     }
   };
@@ -196,15 +224,36 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
-  const handleFetchThumbnail = () => {
+  const handleFetchThumbnail = async () => {
     if (!urlInput.trim()) {
-      showToast('Please paste a video URL or embed code first.', 'error');
+      showToast('Please paste a BBCode link, video URL, or embed code first.', 'error');
       return;
     }
     const parsed = parseVideoUrl(urlInput);
     const autoThumb = getAutoThumbnail(parsed, category);
     setThumbnail(autoThumb);
-    showToast('Thumbnail auto-extracted from link!', 'success');
+    if (parsed.suggestedTitle) {
+      setTitle(parsed.suggestedTitle);
+    }
+    if (parsed.suggestedDuration) {
+      setDuration(parsed.suggestedDuration);
+    }
+
+    setIsFetchingMeta(true);
+    try {
+      const meta = await fetchRemoteVideoMetadata(urlInput);
+      if (meta.thumbnail) setThumbnail(meta.thumbnail);
+      if (meta.title) setTitle(meta.title);
+      if (meta.duration) setDuration(meta.duration);
+      showToast(
+        `Auto-parsed details${meta.duration ? ` (${meta.duration})` : ''} & thumbnail!`,
+        'success'
+      );
+    } catch {
+      showToast('Thumbnail & details extracted from link!', 'success');
+    } finally {
+      setIsFetchingMeta(false);
+    }
   };
 
   // Batch slot helper functions
@@ -223,13 +272,34 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (val.trim()) {
         const parsed = parseVideoUrl(val);
         slot.thumbnail = getAutoThumbnail(parsed, 'HD Videos');
-        if (!slot.title.trim()) {
+        if (parsed.suggestedTitle) {
+          slot.title = parsed.suggestedTitle;
+        } else if (!slot.title.trim()) {
           slot.title = `Exclusive Video #${index + 1}`;
+        }
+        if (parsed.suggestedDuration) {
+          slot.duration = parsed.suggestedDuration;
         }
       }
       updated[index] = slot;
       return updated;
     });
+
+    if (val.trim()) {
+      fetchRemoteVideoMetadata(val).then((meta) => {
+        setBatchSlots((prev) => {
+          const updated = [...prev];
+          if (!updated[index]) return prev;
+          updated[index] = {
+            ...updated[index],
+            thumbnail: meta.thumbnail || updated[index].thumbnail,
+            title: meta.title || updated[index].title,
+            duration: meta.duration || updated[index].duration,
+          };
+          return updated;
+        });
+      });
+    }
   };
 
   const handleBatchSlotFileUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,7 +331,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   const handleQuickPasteProcess = () => {
     if (!quickPasteText.trim()) {
-      showToast('Please paste video links or lines in the text box', 'error');
+      showToast('Please paste video links or BBCode lines in the text box', 'error');
       return;
     }
 
@@ -286,7 +356,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           updated[idx] = {
             ...updated[idx],
             url: line,
-            title: updated[idx].title.trim() || `Hot HD Video #${idx + 1}`,
+            title:
+              parsed.suggestedTitle ||
+              updated[idx].title.trim() ||
+              `Hot HD Video #${idx + 1}`,
+            duration: parsed.suggestedDuration || updated[idx].duration || '15:20',
             thumbnail: autoThumb,
             views: stats.views,
             likes: stats.likes,
@@ -297,16 +371,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       return updated;
     });
 
+    // Auto-fetch duration, title, and thumbnail for each pasted line in background
+    lines.forEach((line, idx) => {
+      fetchRemoteVideoMetadata(line).then((meta) => {
+        setBatchSlots((prev) => {
+          const updated = [...prev];
+          if (!updated[idx]) return prev;
+          updated[idx] = {
+            ...updated[idx],
+            thumbnail: meta.thumbnail || updated[idx].thumbnail,
+            title: meta.title || updated[idx].title,
+            duration: meta.duration || updated[idx].duration,
+          };
+          return updated;
+        });
+      });
+    });
+
     setShowQuickPaste(false);
     setQuickPasteText('');
-    showToast(`Loaded ${lines.length} videos into batch slots!`, 'success');
+    showToast(`Loaded ${lines.length} videos & fetching durations/thumbnails!`, 'success');
   };
 
   // Submit Single Video
   const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlInput.trim()) {
-      showToast('Please provide a video URL or Embed code.', 'error');
+      showToast('Please provide a video URL, BBCode link, or Embed code.', 'error');
       return;
     }
 
@@ -314,7 +405,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const parsed = parseVideoUrl(urlInput);
       const finalThumbnail = thumbnail.trim() || getAutoThumbnail(parsed, category);
-      const finalTitle = title.trim() || 'HD Stream';
+      const finalTitle = title.trim() || parsed.suggestedTitle || 'HD Stream';
+      const finalUrl = parsed.originalUrl || urlInput.trim();
+      const finalDuration = duration.trim() || parsed.suggestedDuration || '15:00';
 
       const stats = generateRandomStats();
       const finalViews = singleViews >= 200_000 ? singleViews : stats.views;
@@ -324,12 +417,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (editingVideo) {
         await onUpdateVideo(editingVideo.id, {
           title: finalTitle,
-          url: urlInput.trim(),
+          url: finalUrl,
           embedUrl: parsed.embedUrl,
           videoType: parsed.videoType,
           provider: parsed.provider,
-          category: 'HD Videos',
-          duration: duration.trim(),
+          category: category || 'HD Videos',
+          duration: finalDuration,
           thumbnail: finalThumbnail,
           isFeatured,
           views: finalViews,
@@ -340,12 +433,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       } else {
         await onPublishVideo({
           title: finalTitle,
-          url: urlInput.trim(),
+          url: finalUrl,
           embedUrl: parsed.embedUrl,
           videoType: parsed.videoType,
           provider: parsed.provider,
-          category: 'HD Videos',
-          duration: duration.trim(),
+          category: category || 'HD Videos',
+          duration: finalDuration,
           thumbnail: finalThumbnail,
           isFeatured,
           views: finalViews,
@@ -370,7 +463,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     const filledSlots = batchSlots.filter((slot) => slot.url.trim().length > 0);
 
     if (filledSlots.length === 0) {
-      showToast('Please fill in at least one video slot with a URL or embed code.', 'error');
+      showToast('Please fill in at least one video slot with a URL or BBCode link.', 'error');
       return;
     }
 
@@ -379,7 +472,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const formattedVideos = filledSlots.map((slot, index) => {
         const parsed = parseVideoUrl(slot.url.trim());
         const finalThumbnail = slot.thumbnail.trim() || getAutoThumbnail(parsed, 'HD Videos');
-        const finalTitle = slot.title.trim() || `Hot Video #${index + 1}`;
+        const finalTitle =
+          slot.title.trim() || parsed.suggestedTitle || `Hot Video #${index + 1}`;
+        const finalUrl = parsed.originalUrl || slot.url.trim();
         const stats = generateRandomStats();
 
         const views = slot.views >= 200_000 ? slot.views : stats.views;
@@ -388,12 +483,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
         return {
           title: finalTitle,
-          url: slot.url.trim(),
+          url: finalUrl,
           embedUrl: parsed.embedUrl,
           videoType: parsed.videoType,
           provider: parsed.provider,
           category: 'HD Videos',
-          duration: slot.duration.trim() || '15:20',
+          duration: slot.duration.trim() || parsed.suggestedDuration || '15:20',
           thumbnail: finalThumbnail,
           isFeatured: slot.isFeatured,
           views,
@@ -477,7 +572,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
             <h4 className="text-xl font-bold text-slate-900 mb-2">Admin Authentication</h4>
             <p className="text-sm text-slate-500 max-w-sm mb-6">
-              Enter your master administrative PIN code to access video management controls. Default PIN is <strong className="text-orange-600 font-mono">8888</strong>.
+              Enter your master administrative access code to unlock video management controls.
             </p>
 
             <form onSubmit={handlePinSubmit} className="w-full max-w-xs space-y-4">
@@ -486,11 +581,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   type="password"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="Enter 4-digit PIN (8888)"
+                  placeholder="Enter access code"
                   className={`w-full h-12 text-center text-xl tracking-widest font-mono rounded-xl bg-slate-50 border ${
                     pinError ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-200'
                   } focus:border-orange-500 focus:bg-white focus:outline-none transition-all`}
-                  maxLength={8}
+                  maxLength={32}
                   autoFocus
                 />
               </div>
@@ -561,25 +656,32 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 {/* URL Input with Auto Parser */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Video Stream URL or Iframe Embed Code *
+                    BBCode Link [url=...]Title[/url], Video Stream URL, or Embed Code *
                   </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={urlInput}
                       onChange={(e) => handleUrlChange(e.target.value)}
-                      placeholder="Paste MP4, m3u8, YouTube, XVideos, Pornhub, Spankbang, or <iframe>..."
+                      placeholder="[url=https://watch-my-gf.com/view_video.php?v=31978]Video Title[/url] or direct URL..."
                       className="flex-1 h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-mono"
                       required
                     />
                     <button
                       type="button"
                       onClick={handleFetchThumbnail}
-                      className="px-3.5 rounded-xl border border-slate-200 hover:bg-orange-50 hover:border-orange-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                      title="Auto Extract Thumbnail"
+                      disabled={isFetchingMeta}
+                      className="px-3.5 rounded-xl border border-slate-200 hover:bg-orange-50 hover:border-orange-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-60"
+                      title="Auto Extract Thumbnail, Title & Duration"
                     >
-                      <Sparkles className="w-4 h-4 text-orange-500" />
-                      <span className="hidden sm:inline">Auto Parse</span>
+                      {isFetchingMeta ? (
+                        <RefreshCw className="w-4 h-4 text-orange-500 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-orange-500" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {isFetchingMeta ? 'Fetching...' : 'Auto Parse'}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -593,7 +695,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Enter engaging descriptive title..."
+                    placeholder="Auto-filled from [url=...]Title[/url] or page metadata..."
                     className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                   />
                 </div>
@@ -643,13 +745,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Duration
+                      Duration {isFetchingMeta && <span className="text-orange-500 lowercase font-normal">(auto-fetching...)</span>}
                     </label>
                     <input
                       type="text"
                       value={duration}
                       onChange={(e) => setDuration(e.target.value)}
-                      placeholder="e.g. 18:45"
+                      placeholder="e.g. 19:33"
                       className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono focus:border-orange-500 focus:bg-white focus:outline-none"
                     />
                   </div>

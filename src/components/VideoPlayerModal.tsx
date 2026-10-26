@@ -1,33 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Maximize,
-  Minimize,
   Heart,
-  Eye,
-  Bookmark,
-  Tv,
-  Sparkles,
   Edit2,
   Trash2,
   ArrowLeft,
-  Share2,
 } from 'lucide-react';
 import { VideoItem } from '../types/video';
 import { formatViews, getLikePercentage } from '../utils/formatters';
+import { parseVideoUrl, fetchRemoteVideoMetadata } from '../utils/videoParser';
 
 interface VideoPlayerModalProps {
   video: VideoItem | null;
   onClose: () => void;
   onLike: (video: VideoItem) => void;
   isLiked: boolean;
-  onToggleBookmark: (video: VideoItem) => void;
-  isBookmarked: boolean;
-  onShare: (video: VideoItem) => void;
   allVideos: VideoItem[];
   onSelectVideo: (video: VideoItem) => void;
   isAdmin?: boolean;
@@ -40,35 +28,41 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onClose,
   onLike,
   isLiked,
-  onToggleBookmark,
-  isBookmarked,
-  onShare,
   allVideos,
   onSelectVideo,
   isAdmin,
   onEditVideo,
   onDeleteVideo,
 }) => {
-  const [forceEmbedMode, setForceEmbedMode] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [progress, setProgress] = useState(0);
-  const [currentTimeStr, setCurrentTimeStr] = useState('00:00');
-  const [durationStr, setDurationStr] = useState('00:00');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [resolvedEmbedSrc, setResolvedEmbedSrc] = useState<string>('');
 
   useEffect(() => {
-    // Reset state when video changes
-    setForceEmbedMode(false);
-    setIsPlaying(true);
-    setProgress(0);
+    if (!video) {
+      setResolvedEmbedSrc('');
+      return;
+    }
+
+    const initialParsed = parseVideoUrl(video.embedUrl || video.url);
+    const initialSrc = initialParsed.embedUrl || video.embedUrl || video.url;
+    setResolvedEmbedSrc(initialSrc);
+
+    const needsCanonicalLookup =
+      /xvideos\..*\/embedframe\/[a-zA-Z]/i.test(initialSrc) ||
+      (!/embed|player/i.test(initialSrc) && initialParsed.videoType !== 'html5');
+
+    if (needsCanonicalLookup) {
+      let cancelled = false;
+      fetchRemoteVideoMetadata(video.url || video.embedUrl).then((meta) => {
+        if (!cancelled && meta.embedUrl && meta.embedUrl !== initialSrc) {
+          setResolvedEmbedSrc(meta.embedUrl);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
   }, [video]);
 
-  // Handle ESC key to close full screen overlay
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -81,381 +75,174 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   if (!video) return null;
 
-  // Recommendations filtering (other videos except current)
   const recommendations = allVideos.filter((v) => v.id !== video.id).slice(0, 8);
-
-  const isHtml5 = video.videoType === 'html5' && !forceEmbedMode;
-
-  const handleTimeUpdate = () => {
-    if (!videoRef.current) return;
-    const current = videoRef.current.currentTime;
-    const duration = videoRef.current.duration || 1;
-    setProgress((current / duration) * 100);
-
-    const format = (s: number) => {
-      const mins = Math.floor(s / 60);
-      const secs = Math.floor(s % 60);
-      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-    setCurrentTimeStr(format(current));
-    setDurationStr(format(duration));
-  };
-
-  const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      videoRef.current.play();
-      setIsPlaying(true);
-    }
-  };
-
-  const toggleMute = () => {
-    if (!videoRef.current) return;
-    videoRef.current.muted = !isMuted;
-    setIsMuted(!isMuted);
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
-    setVolume(val);
-    if (videoRef.current) {
-      videoRef.current.volume = val;
-      setIsMuted(val === 0);
-    }
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const pct = parseFloat(e.target.value);
-    setProgress(pct);
-    if (videoRef.current && videoRef.current.duration) {
-      videoRef.current.currentTime = (pct / 100) * videoRef.current.duration;
-    }
-  };
-
-  const toggleFullscreen = () => {
-    if (!stageRef.current) return;
-    if (!document.fullscreenElement) {
-      stageRef.current.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
-    }
-  };
+  const isHtml5 = video.videoType === 'html5';
 
   return (
     <div
       id="video-player-overlay"
-      className="fixed inset-0 z-50 w-full h-full min-h-screen bg-slate-950 text-slate-100 flex flex-col overflow-y-auto overflow-x-hidden animate-fade-in"
+      className="fixed inset-0 z-50 w-full h-full min-h-screen bg-white text-black flex flex-col overflow-y-auto overflow-x-hidden animate-fade-in"
     >
-      {/* Full Top Navigation Header Bar */}
-      <header className="sticky top-0 z-40 w-full bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-        {/* Left: Back & Video title */}
+      {/* Top Bar */}
+      <header className="sticky top-0 z-40 w-full bg-white border-b border-black px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={onClose}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 hover:bg-orange-500 hover:text-white text-slate-300 text-xs font-bold transition-all cursor-pointer border border-slate-700"
-            title="Back to Video Catalog (Esc)"
+            className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-black text-black hover:text-white text-xs font-bold transition-colors cursor-pointer border border-black rounded-none shrink-0"
+            title="Back (Esc)"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Back to Browse</span>
+            <span>Back</span>
           </button>
 
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="px-2.5 py-0.5 rounded bg-orange-500/20 border border-orange-500/40 text-orange-400 font-bold text-xs uppercase tracking-wider shrink-0">
-              HD ULTRA STREAM
-            </span>
-            <h2 className="text-sm sm:text-base font-bold text-white truncate max-w-md lg:max-w-xl">
-              {video.title}
-            </h2>
-          </div>
+          <h2 className="text-sm sm:text-base font-bold text-black truncate">
+            {video.title}
+          </h2>
         </div>
 
-        {/* Right: Controls & Close */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Force Embed Toggle Switch */}
-          <button
-            onClick={() => setForceEmbedMode(!forceEmbedMode)}
-            className={`px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-              forceEmbedMode
-                ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
-            }`}
-            title="Toggle Direct Video Stream / Iframe Embed"
-          >
-            <Tv className="w-3.5 h-3.5 text-orange-400" />
-            <span className="hidden md:inline">
-              {forceEmbedMode ? 'Embed Active' : 'Direct Player'}
-            </span>
-          </button>
-
-          {/* Close button */}
-          <button
-            id="close-player-btn"
-            onClick={onClose}
-            className="p-2 rounded-full bg-slate-800 hover:bg-red-500 text-slate-300 hover:text-white transition-all cursor-pointer border border-slate-700"
-            title="Close Player (Esc)"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+        <button
+          id="close-player-btn"
+          onClick={onClose}
+          className="p-2 bg-white hover:bg-black text-black hover:text-white transition-colors cursor-pointer border border-black rounded-none shrink-0"
+          title="Close (Esc)"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </header>
 
-      {/* Main Full-Screen Player Workspace */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col gap-6">
-        {/* Cinematic Theatre Video Player Stage */}
-        <div className="w-full rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-2xl shadow-black/80">
-          <div
-            ref={stageRef}
-            className="relative w-full aspect-video max-h-[75vh] bg-black flex items-center justify-center overflow-hidden group"
-          >
-            {isHtml5 ? (
-              <>
-                <video
-                  ref={videoRef}
-                  src={video.embedUrl}
-                  poster={video.thumbnail}
-                  autoPlay
-                  playsInline
-                  onTimeUpdate={handleTimeUpdate}
-                  onEnded={() => setIsPlaying(false)}
-                  className="w-full h-full object-contain"
-                />
-
-                {/* HTML5 Custom Controls Bar Overlay */}
-                <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col gap-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  {/* Progress Slider */}
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={progress}
-                    onChange={handleSeek}
-                    className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-orange-500 hover:bg-white/40 transition-all"
-                  />
-
-                  <div className="flex items-center justify-between text-xs text-white">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={togglePlay}
-                        className="hover:text-orange-400 transition-colors cursor-pointer"
-                        title={isPlaying ? 'Pause' : 'Play'}
-                      >
-                        {isPlaying ? (
-                          <Pause className="w-5 h-5" />
-                        ) : (
-                          <Play className="w-5 h-5 fill-white" />
-                        )}
-                      </button>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={toggleMute}
-                          className="hover:text-orange-400 transition-colors cursor-pointer"
-                        >
-                          {isMuted ? (
-                            <VolumeX className="w-4 h-4 text-orange-400" />
-                          ) : (
-                            <Volume2 className="w-4 h-4" />
-                          )}
-                        </button>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={volume}
-                          onChange={handleVolumeChange}
-                          className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer accent-orange-500"
-                        />
-                      </div>
-
-                      <span className="font-mono text-xs text-slate-300">
-                        {currentTimeStr} / {durationStr}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={toggleFullscreen}
-                        className="p-1 hover:text-orange-400 transition-colors cursor-pointer"
-                        title="Toggle Fullscreen"
-                      >
-                        {isFullscreen ? (
-                          <Minimize className="w-4 h-4" />
-                        ) : (
-                          <Maximize className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <iframe
-                src={video.embedUrl}
-                title="Video Player"
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              ></iframe>
-            )}
-          </div>
+      {/* Main Content */}
+      <main className="flex-1 w-full max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col gap-6">
+        {/* Video Player - Original Size, Sharp Square Corners (No Curved Corners) */}
+        <div className="w-full bg-black border border-black rounded-none flex items-center justify-center">
+          {isHtml5 ? (
+            <video
+              src={resolvedEmbedSrc || video.embedUrl}
+              poster={video.thumbnail}
+              controls
+              autoPlay
+              playsInline
+              className="w-auto h-auto max-w-full rounded-none block"
+            />
+          ) : (
+            <iframe
+              key={resolvedEmbedSrc || video.embedUrl}
+              src={resolvedEmbedSrc || video.embedUrl}
+              title={video.title || 'Video Player'}
+              width="1024"
+              height="576"
+              className="w-full max-w-[1024px] aspect-video border-0 rounded-none block"
+              sandbox="allow-scripts allow-same-origin allow-presentation"
+              referrerPolicy="no-referrer"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+              allowFullScreen
+            />
+          )}
         </div>
 
-        {/* Video Information & Action Controls Card */}
-        <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-2xl font-black text-white mb-2 leading-snug">
-              {video.title}
-            </h1>
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-slate-400">
-              <span className="flex items-center gap-1.5 font-mono text-slate-300">
-                <Eye className="w-4 h-4 text-orange-400" />
-                <span className="font-bold">{formatViews(video.views)}</span> views
-              </span>
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-400 font-bold border border-orange-500/30 font-mono text-xs">
-                <Heart className="w-3.5 h-3.5 fill-orange-400 text-orange-400" />
-                <span>{getLikePercentage(video)}% Positive Rating</span>
-              </span>
-              <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[11px]">
-                Source: {video.provider || 'HD Stream'}
-              </span>
-              {video.duration && (
-                <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[11px]">
-                  Duration: {video.duration}
-                </span>
-              )}
+        {/* Video Info & Essential Controls */}
+        <div className="px-4 sm:px-0">
+          <div className="w-full bg-white border border-black rounded-none p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg sm:text-xl font-black text-black mb-1.5 leading-snug">
+                {video.title}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-black/70 font-mono tabular-nums">
+                <span>{formatViews(video.views)} views</span>
+                <span aria-hidden="true">·</span>
+                <span className="font-bold text-black">{getLikePercentage(video)}% liked</span>
+                {video.duration && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{video.duration}</span>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Action Buttons Toolbar */}
-          <div className="flex items-center flex-wrap gap-2.5 shrink-0 w-full md:w-auto justify-end">
-            {isAdmin && (
-              <div className="flex items-center gap-2 pr-2 mr-2 border-r border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => onEditVideo?.(video)}
-                  className="px-3 py-2 rounded-xl bg-orange-500/20 hover:bg-orange-500 text-orange-300 hover:text-white border border-orange-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                  title="Edit Video"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>Edit</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm('Are you sure you want to delete this video?')) {
+            <div className="flex items-center flex-wrap gap-2 shrink-0">
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onEditVideo?.(video)}
+                    className="px-3 py-2 bg-white hover:bg-black text-black hover:text-white border border-black text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 rounded-none"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
                       onDeleteVideo?.(video.id);
                       onClose();
-                    }
-                  }}
-                  className="px-3 py-2 rounded-xl bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white border border-red-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                  title="Delete Video"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete</span>
-                </button>
-              </div>
-            )}
+                    }}
+                    className="px-3 py-2 bg-black hover:bg-white text-white hover:text-black border border-black text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 rounded-none"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </>
+              )}
 
-            <button
-              onClick={() => onLike(video)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                isLiked
-                  ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/30'
-                  : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-orange-500/20 hover:border-orange-500/40 hover:text-orange-400'
-              }`}
-            >
-              <Heart
-                className={`w-4 h-4 ${isLiked ? 'fill-white text-white' : 'text-orange-400'}`}
-              />
-              <span>{video.likes + (isLiked ? 1 : 0)} Likes</span>
-            </button>
-
-            <button
-              onClick={() => onToggleBookmark(video)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                isBookmarked
-                  ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/30'
-                  : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-orange-500/20 hover:border-orange-500/40 hover:text-orange-400'
-              }`}
-              title={isBookmarked ? 'Saved to Bookmarks' : 'Save to Bookmarks'}
-            >
-              <Bookmark
-                className={`w-4 h-4 ${isBookmarked ? 'fill-white text-white' : 'text-orange-400'}`}
-              />
-              <span>{isBookmarked ? 'Saved' : 'Bookmark'}</span>
-            </button>
-
-            <button
-              onClick={() => onShare(video)}
-              className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-white transition-all cursor-pointer"
-              title="Share Stream URL"
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
+              <button
+                onClick={() => onLike(video)}
+                className={`flex items-center gap-2 px-4 py-2 border border-black text-xs font-bold transition-colors cursor-pointer rounded-none font-mono tabular-nums ${
+                  isLiked
+                    ? 'bg-black text-white'
+                    : 'bg-white text-black hover:bg-black hover:text-white'
+                }`}
+              >
+                <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-white' : ''}`} />
+                <span>{video.likes + (isLiked ? 1 : 0)}</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Up Next & More Recommended HD Videos Section */}
+        {/* More Videos */}
         {recommendations.length > 0 && (
-          <section className="w-full mt-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-orange-400" />
-                <span>Up Next & Recommended Videos</span>
-              </h3>
-              <span className="text-xs font-mono text-slate-400">
-                {recommendations.length} Recommended
-              </span>
-            </div>
+          <section className="w-full px-4 sm:px-0 mt-2">
+            <h3 className="text-sm font-black uppercase tracking-wider text-black mb-4 pb-2 border-b border-black">
+              More Videos
+            </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {recommendations.map((rec) => (
                 <div
                   key={rec.id}
                   onClick={() => onSelectVideo(rec)}
-                  className="group bg-slate-900 border border-slate-800 hover:border-orange-500/60 rounded-xl overflow-hidden transition-all duration-200 hover:shadow-xl cursor-pointer flex flex-col"
+                  className="group bg-white border border-black rounded-none cursor-pointer flex flex-col"
                 >
-                  <div className="relative aspect-video w-full bg-slate-950 overflow-hidden flex items-center justify-center">
+                  <div className="relative aspect-video w-full bg-black overflow-hidden flex items-center justify-center rounded-none">
                     <img
                       src={rec.thumbnail}
                       alt={rec.title || 'Video Thumbnail'}
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-contain"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg">
-                        <Play className="w-5 h-5 fill-current ml-0.5" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                      <div className="w-9 h-9 bg-white text-black border border-black flex items-center justify-center">
+                        <Play className="w-4 h-4 fill-black ml-0.5" />
                       </div>
                     </div>
                     {rec.duration && (
-                      <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 text-white font-mono text-[10px] font-bold">
+                      <span className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black text-white font-mono text-[10px] font-bold tabular-nums">
                         {rec.duration}
                       </span>
                     )}
                   </div>
 
                   <div className="p-3 flex flex-col flex-1 justify-between gap-2">
-                    <h4 className="text-xs font-bold text-slate-200 group-hover:text-orange-400 transition-colors line-clamp-2 leading-snug">
-                      {rec.title || 'HD Adult Video Stream'}
+                    <h4 className="text-xs font-bold text-black group-hover:underline line-clamp-2 leading-snug">
+                      {rec.title || 'HD Video Stream'}
                     </h4>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                      <span className="flex items-center gap-1">
-                        <Eye className="w-3 h-3 text-orange-400" />
-                        {formatViews(rec.views)}
-                      </span>
-                      <span className="flex items-center gap-1 text-orange-400 font-bold">
-                        <Heart className="w-3 h-3 fill-orange-400" />
-                        {getLikePercentage(rec)}%
-                      </span>
+                    <div className="flex items-center gap-1.5 text-[11px] text-black/70 font-mono tabular-nums">
+                      <span>{formatViews(rec.views)} views</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-bold text-black">{getLikePercentage(rec)}%</span>
                     </div>
                   </div>
                 </div>
