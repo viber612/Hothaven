@@ -348,6 +348,16 @@ function extractMetaFromHtml(html: string): RemoteVideoMetadata {
     return '';
   };
 
+  const decodeEntities = (s: string): string =>
+    s
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#0?39;|&apos;|&#x27;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+
   let title = metaTag('og:title') || metaTag('twitter:title');
   if (!title) {
     const tMatch = html.match(/<title[^>]*>([\s\S]{1,300}?)<\/title>/i);
@@ -355,21 +365,53 @@ function extractMetaFromHtml(html: string): RemoteVideoMetadata {
   }
   if (title) {
     // Strip common site-name suffixes like " - Pornhub.com"
-    meta.title = title.replace(/\s*[-|–]\s*(Pornhub|xVideos|xHamster|SpankBang|RedTube|YouPorn|YouTube)$/, '').trim();
+    title = decodeEntities(
+      title.replace(/\s*[-|–]\s*(Pornhub|xVideos|xHamster|SpankBang|RedTube|YouPorn|YouTube|XNXX|Eporner|HQporner)$/i, '').trim()
+    );
+    meta.title = title;
   }
 
-  const thumb =
+  let thumb =
     metaTag('og:image:secure_url') ||
     metaTag('og:image') ||
     metaTag('twitter:image') ||
     metaTag('twitter:image:src');
+  if (!thumb) {
+    // JSON-LD thumbnailUrl / image fields
+    const jsonLdThumb = html.match(
+      /"(?:thumbnailUrl|thumbnail|image|previewUrl|poster)"\s*:\s*"(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp|gif)[^"]*)"/i
+    );
+    if (jsonLdThumb) thumb = jsonLdThumb[1];
+  }
+  if (!thumb) {
+    // KVS-style inline JS: image / poster / preview / thumb vars
+    const jsThumb = html.match(
+      /(?:image|poster|thumbnail|thumb|preview|cover)["']?\s*[:=]\s*["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["']/i
+    );
+    if (jsThumb) thumb = jsThumb[1];
+  }
   if (thumb) meta.thumbnail = thumb;
 
-  // Duration: look for meta tags, JSON-LD, or common DOM patterns
-  let duration = metaTag('og:video:duration') || metaTag('video:duration');
+  // Duration: meta tags, JSON-LD (ISO-8601 or seconds), or DOM text
+  let duration = metaTag('og:video:duration') || metaTag('video:duration') || metaTag('duration');
   if (!duration) {
     const ldMatch = html.match(/"duration"\s*:\s*"(PT[^"]+)"/i);
     if (ldMatch) duration = normalizeDurationString(ldMatch[1]) || '';
+  }
+  if (!duration) {
+    // duration as raw seconds inside JSON, e.g. "duration":1234
+    const secMatch = html.match(/"duration"\s*:\s*(\d{2,6})\s*[,}]/i);
+    if (secMatch) {
+      const total = parseInt(secMatch[1], 10);
+      if (total > 30 && total < 43200) {
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = total % 60;
+        duration = h > 0
+          ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+          : `${m}:${String(s).padStart(2, '0')}`;
+      }
+    }
   }
   if (!duration) {
     const durMatch = html.match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
@@ -380,7 +422,22 @@ function extractMetaFromHtml(html: string): RemoteVideoMetadata {
   return meta;
 }
 
-async function fetchWithTimeout(url: string, ms = 12000): Promise<Response | null> {
+function extractMetaFromText(text: string): RemoteVideoMetadata {
+  const meta: RemoteVideoMetadata = {};
+  const titleMatch = text.match(/^Title:\s*(.+)$/m);
+  if (titleMatch && titleMatch[1].trim()) meta.title = titleMatch[1].trim();
+  const imgMatch = text.match(/!\[[^\]]*\]\((https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/i);
+  if (imgMatch && imgMatch[1]) meta.thumbnail = imgMatch[1];
+  if (!meta.thumbnail) {
+    const thumbUrlMatch = text.match(/(https?:\/\/[^\s"'()]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'()]*)?)/i);
+    if (thumbUrlMatch) meta.thumbnail = thumbUrlMatch[1];
+  }
+  const durMatch = text.match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
+  if (durMatch) meta.duration = durMatch[1];
+  return meta;
+}
+
+async function fetchWithTimeout(url: string, ms = 9000): Promise<Response | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
@@ -419,37 +476,54 @@ async function fetchMetaViaMicrolink(url: string): Promise<RemoteVideoMetadata> 
 }
 
 async function fetchMetaViaJina(url: string): Promise<RemoteVideoMetadata> {
-  const meta: RemoteVideoMetadata = {};
-  const response = await fetchWithTimeout(
-    `https://r.jina.ai/${url}`
-  );
-  if (!response) return meta;
+  const response = await fetchWithTimeout(`https://r.jina.ai/${url}`);
+  if (!response) return {};
   const text = await response.text();
-  if (!text) return meta;
-  // Jina returns markdown: "Title: ...\nURL Source: ...\n\nMarkdown Content:"
-  const titleMatch = text.match(/^Title:\s*(.+)$/m);
-  if (titleMatch && titleMatch[1].trim()) meta.title = titleMatch[1].trim();
-  const imgMatch = text.match(/!\[[^\]]*\]\((https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/i);
-  if (imgMatch && imgMatch[1]) meta.thumbnail = imgMatch[1];
-  if (!meta.thumbnail) {
-    const thumbUrlMatch = text.match(/(https?:\/\/[^\s"'()]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'()]*)?)/i);
-    if (thumbUrlMatch) meta.thumbnail = thumbUrlMatch[1];
-  }
-  const durMatch = text.match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
-  if (durMatch) meta.duration = durMatch[1];
-  return meta;
+  if (!text) return {};
+  return extractMetaFromText(text);
 }
 
-async function fetchMetaViaHtmlProxy(url: string, proxy: 'allorigins' | 'corsproxy'): Promise<RemoteVideoMetadata> {
-  const proxied =
-    proxy === 'allorigins'
-      ? `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-      : `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+type ProxyKind = 'allorigins' | 'allorigins-get' | 'corsproxy' | 'codetabs';
+
+async function fetchMetaViaHtmlProxy(url: string, proxy: ProxyKind): Promise<RemoteVideoMetadata> {
+  let proxied: string;
+  let parseJson = false;
+  switch (proxy) {
+    case 'allorigins':
+      proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      break;
+    case 'allorigins-get':
+      proxied = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      parseJson = true;
+      break;
+    case 'corsproxy':
+      proxied = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+      break;
+    case 'codetabs':
+      proxied = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+      break;
+  }
   const response = await fetchWithTimeout(proxied);
   if (!response) return {};
-  const html = await response.text();
-  if (!html) return {};
-  return extractMetaFromHtml(html);
+  let payload = await response.text();
+  if (!payload) return {};
+  if (parseJson) {
+    try {
+      const json = JSON.parse(payload);
+      payload = typeof json?.contents === 'string' ? json.contents : '';
+    } catch {
+      payload = '';
+    }
+  }
+  if (!payload) return {};
+  return extractMetaFromHtml(payload);
+}
+
+function getInstantThumbnail(url: string): string {
+  // YouTube thumbnails can be constructed directly without any network fetch
+  const yt = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (yt) return `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg`;
+  return '';
 }
 
 export async function fetchRemoteVideoMetadata(input: string): Promise<RemoteVideoMetadata> {
@@ -466,25 +540,31 @@ export async function fetchRemoteVideoMetadata(input: string): Promise<RemoteVid
     return result;
   }
 
-  // Best-effort metadata fetch with multiple providers tried in order.
-  // The first provider that returns any useful field wins for that field.
+  // Guarantee a thumbnail when nothing else provides one
+  if (!result.thumbnail) {
+    const instant = getInstantThumbnail(parsed.originalUrl);
+    if (instant) result.thumbnail = instant;
+  }
+
+  // Run ALL providers in parallel (fast), then merge results in priority
+  // order so earlier providers win for any field they found.
   const providers: Array<() => Promise<RemoteVideoMetadata>> = [
     () => fetchMetaViaMicrolink(parsed.originalUrl),
     () => fetchMetaViaHtmlProxy(parsed.originalUrl, 'allorigins'),
     () => fetchMetaViaHtmlProxy(parsed.originalUrl, 'corsproxy'),
+    () => fetchMetaViaHtmlProxy(parsed.originalUrl, 'codetabs'),
+    () => fetchMetaViaHtmlProxy(parsed.originalUrl, 'allorigins-get'),
     () => fetchMetaViaJina(parsed.originalUrl),
   ];
 
-  for (const provider of providers) {
-    try {
-      const meta = await provider();
-      if (!result.title && meta.title) result.title = meta.title;
-      if (!result.thumbnail && meta.thumbnail) result.thumbnail = meta.thumbnail;
-      if (!result.duration && meta.duration) result.duration = meta.duration;
-      if (result.title && result.thumbnail && result.duration) break; // all fields found
-    } catch (err) {
-      console.warn('Metadata provider failed, trying next:', err);
-    }
+  const settled = await Promise.allSettled(providers.map((p) => p()));
+
+  for (const outcome of settled) {
+    if (outcome.status !== 'fulfilled' || !outcome.value) continue;
+    const meta = outcome.value;
+    if (!result.title && meta.title) result.title = meta.title;
+    if (!result.thumbnail && meta.thumbnail) result.thumbnail = meta.thumbnail;
+    if (!result.duration && meta.duration) result.duration = meta.duration;
   }
 
   return result;

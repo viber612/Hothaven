@@ -284,8 +284,16 @@ export default function App() {
 
   // Video Actions
   const handleSelectVideo = (video: VideoItem) => {
-    setActivePlayerVideo(video);
+    // Redirect the visitor straight to the original video page
     incrementVideoViews(video.id, video.views);
+    const targetUrl = video.url || video.embedUrl;
+    if (targetUrl && /^https?:\/\//i.test(targetUrl)) {
+      try {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      } catch (e) {
+        console.warn('Unable to open video link:', e);
+      }
+    }
   };
 
   const handleToggleBookmark = (video: VideoItem) => {
