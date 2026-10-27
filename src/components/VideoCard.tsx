@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Edit2, Trash2 } from 'lucide-react';
+import { Edit2, Trash2 } from 'lucide-react';
 import { VideoItem } from '../types/video';
 import { formatViews, getLikePercentage } from '../utils/formatters';
 
@@ -55,19 +55,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           />
         ) : null}
 
-        {/* Play Icon Hover Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/0 group-hover:bg-black/30 transition-colors">
-          <div className="w-10 h-10 bg-white text-black border border-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Play className="w-4 h-4 fill-black ml-0.5" />
-          </div>
-        </div>
-
-        {/* Duration Text Overlay */}
-        {video.duration && (
-          <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black text-white text-[11px] font-bold font-mono tabular-nums">
-            {video.duration}
-          </div>
-        )}
       </div>
 
       {/* Card Body - Video Title */}
