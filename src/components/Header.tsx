@@ -1,10 +1,16 @@
 import React, { useRef } from 'react';
 import { Search, X } from 'lucide-react';
+import { SortOption } from '../types/video';
 
 interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  sortBy?: SortOption;
+  onSortChange?: (sort: SortOption) => void;
+  bookmarkCount?: number;
+  onOpenBookmarks?: () => void;
   onOpenAdmin: () => void;
+  isAdmin?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({

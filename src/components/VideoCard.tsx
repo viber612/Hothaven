@@ -6,6 +6,9 @@ import { formatViews, getLikePercentage } from '../utils/formatters';
 interface VideoCardProps {
   video: VideoItem;
   onSelect: (video: VideoItem) => void;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (video: VideoItem) => void;
+  onShare?: (video: VideoItem) => void;
   isAdmin: boolean;
   onEdit?: (video: VideoItem) => void;
   onDelete?: (id: string) => void;

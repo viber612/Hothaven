@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 
 interface FooterProps {
   onOpenAdminModal: () => void;
+  isAdmin?: boolean;
+  onOpenAgeGate?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onOpenAdminModal }) => {

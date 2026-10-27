@@ -12,6 +12,12 @@ import {
   Award,
 } from 'lucide-react';
 import { VideoItem, VideoCategory, SortOption, ToastMessage } from './types/video';
+import { auth } from './lib/firebase';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import {
   subscribeToVideos,
   addVideoToFirestore,
@@ -33,7 +39,6 @@ import { ToastContainer } from './components/Toast';
 import { Footer } from './components/Footer';
 
 const ITEMS_PER_PAGE = 12;
-const DEFAULT_ADMIN_PIN = '040820062007';
 
 const CATEGORIES: VideoCategory[] = [
   'All',
@@ -80,6 +85,25 @@ export default function App() {
       return false;
     }
   });
+
+  // Track Firebase Auth session (admin is signed in via email/password only)
+  useEffect(() => {
+    if (!auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const signedIn = Boolean(user);
+      setIsAdmin(signedIn);
+      try {
+        if (signedIn) {
+          sessionStorage.setItem('hothaven_admin_auth', 'true');
+        } else {
+          sessionStorage.removeItem('hothaven_admin_auth');
+        }
+      } catch {
+        // ignore storage errors
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // 6. Bookmarks State
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
@@ -177,25 +201,23 @@ export default function App() {
     showToast('Age verified! Welcome to HOT HAVEN.', 'success');
   };
 
-  // Handle Admin PIN Authentication
-  const handleAuthenticateAdmin = (pin: string) => {
-    if (pin.trim() === DEFAULT_ADMIN_PIN) {
-      try {
-        sessionStorage.setItem('hothaven_admin_auth', 'true');
-      } catch (e) {
-        console.warn('Unable to persist admin session:', e);
-      }
-      setIsAdmin(true);
+  // Handle Admin Authentication via Firebase Auth (email + password).
+  // The password is verified server-side by Firebase — it is never stored
+  // in this codebase or exposed in the compiled bundle.
+  const handleAuthenticateAdmin = async (email: string, password: string) => {
+    if (!auth) return false;
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       return true;
+    } catch (e) {
+      console.warn('Admin sign-in failed:', e);
+      return false;
     }
-    return false;
   };
 
   const handleLockAdmin = () => {
-    try {
-      sessionStorage.removeItem('hothaven_admin_auth');
-    } catch (e) {
-      console.warn('Unable to clear admin session:', e);
+    if (auth) {
+      signOut(auth).catch((e) => console.warn('Admin sign-out failed:', e));
     }
     setIsAdmin(false);
     showToast('Admin Session Locked', 'info');

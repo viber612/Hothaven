@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App safely
@@ -56,3 +57,16 @@ export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Rec
 
 export { app, db };
 
+// Initialize Firebase Authentication (used for secure admin sign-in).
+// The admin password is verified server-side by Firebase and never exists
+// in the source code or the compiled JavaScript bundle.
+let auth: any = null;
+if (app) {
+  try {
+    auth = getAuth(app);
+  } catch (e) {
+    console.warn('Firebase Auth not available:', e);
+  }
+}
+
+export { auth };

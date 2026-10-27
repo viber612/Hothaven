@@ -20,7 +20,7 @@ import {
   Tv,
 } from 'lucide-react';
 import { VideoItem, VideoCategory } from '../types/video';
-import { parseVideoUrl, getAutoThumbnail } from '../utils/videoParser';
+import { parseVideoUrl, getAutoThumbnail, fetchRemoteVideoMetadata } from '../utils/videoParser';
 import { resizeImageFile } from '../utils/thumbnail';
 import { formatViews, generateRandomStats } from '../utils/formatters';
 
@@ -40,8 +40,9 @@ interface AdminPanelModalProps {
   isOpen: boolean;
   onClose: () => void;
   isAdmin: boolean;
-  onAuthenticateAdmin: (pin: string) => boolean;
+  onAuthenticateAdmin: (email: string, password: string) => Promise<boolean>;
   onLockAdmin: () => void;
+  videos?: VideoItem[];
   onPublishVideo: (
     data: Omit<VideoItem, 'id' | 'views' | 'likes' | 'createdAt'> & {
       views?: number;
@@ -59,6 +60,7 @@ interface AdminPanelModalProps {
     >
   ) => Promise<void>;
   editingVideo: VideoItem | null;
+  onSelectEditVideo?: (video: VideoItem) => void;
   onUpdateVideo: (id: string, updates: Partial<VideoItem>) => Promise<void>;
   onDeleteVideo: (id: string) => Promise<void>;
   onDeleteAllVideos?: () => Promise<void>;
@@ -94,8 +96,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onDeleteAllVideos,
   showToast,
 }) => {
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [activeTab, setActiveTab] = useState<'single' | 'batch'>('single');
 
   // Single Form Fields
@@ -160,16 +164,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handleAdminSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = onAuthenticateAdmin(pinInput);
-    if (success) {
-      setPinError(false);
-      setPinInput('');
-      showToast('Portal unlocked successfully', 'success');
-    } else {
-      setPinError(true);
-      showToast('Invalid access PIN key!', 'error');
+    if (!emailInput.trim() || !passwordInput) {
+      showToast('Enter both email and password.', 'error');
+      return;
+    }
+    setIsSigningIn(true);
+    try {
+      const success = await onAuthenticateAdmin(emailInput.trim(), passwordInput);
+      if (success) {
+        setAuthError(false);
+        setEmailInput('');
+        setPasswordInput('');
+        showToast('Portal unlocked successfully', 'success');
+      } else {
+        setAuthError(true);
+        showToast('Invalid email or password!', 'error');
+      }
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
@@ -534,7 +548,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 text-xs font-semibold border border-orange-200">
-                    PIN Protected
+                    Protected
                   </span>
                 )}
               </h3>
@@ -572,30 +586,43 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
             <h4 className="text-xl font-bold text-slate-900 mb-2">Admin Authentication</h4>
             <p className="text-sm text-slate-500 max-w-sm mb-6">
-              Enter your master administrative access code to unlock video management controls.
+              Sign in with your secure administrator account (verified by Firebase) to unlock video management controls.
             </p>
 
-            <form onSubmit={handlePinSubmit} className="w-full max-w-xs space-y-4">
+            <form onSubmit={handleAdminSignIn} className="w-full max-w-xs space-y-4">
+              <div>
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="Admin email"
+                  className={`w-full h-12 px-4 text-sm rounded-xl bg-slate-50 border ${
+                    authError ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-200'
+                  } focus:border-orange-500 focus:bg-white focus:outline-none transition-all`}
+                  autoComplete="username"
+                  autoFocus
+                />
+              </div>
               <div>
                 <input
                   type="password"
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="Enter access code"
-                  className={`w-full h-12 text-center text-xl tracking-widest font-mono rounded-xl bg-slate-50 border ${
-                    pinError ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-200'
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Password"
+                  className={`w-full h-12 px-4 text-sm rounded-xl bg-slate-50 border ${
+                    authError ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-200'
                   } focus:border-orange-500 focus:bg-white focus:outline-none transition-all`}
-                  maxLength={32}
-                  autoFocus
+                  autoComplete="current-password"
                 />
               </div>
 
               <button
                 type="submit"
+                disabled={isSigningIn}
                 className="w-full h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-md shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Unlock className="w-4 h-4" />
-                <span>Unlock Dashboard</span>
+                <span>{isSigningIn ? 'Verifying...' : 'Unlock Dashboard'}</span>
               </button>
             </form>
           </div>

@@ -1,6 +1,15 @@
 import React from 'react';
+import { VideoItem } from '../types/video';
 
-export const HeroFeatured: React.FC = () => {
+interface HeroFeaturedProps {
+  video?: VideoItem;
+  onPlay?: (video: VideoItem) => void;
+  onToggleBookmark?: (video: VideoItem) => void;
+  isBookmarked?: boolean;
+  onShare?: (video: VideoItem) => void;
+}
+
+export const HeroFeatured: React.FC<HeroFeaturedProps> = () => {
   return (
     <section
       aria-label="Advertisement Placement"
