@@ -4,26 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Download</title>
+    <title>Welcome Offer</title>
     <style>
       * { box-sizing: border-box; }
-      html, body { margin: 0; width: 100%; height: 100%; background: #fff; }
+      html, body { margin: 0; width: 100%; height: 100%; background: #f8fafc; }
       body { overflow: hidden; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .page { position: relative; display: grid; place-items: center; width: 100%; min-height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 45%, rgba(238, 242, 255, .72), transparent 34rem), #fff; }
-      .page::before, .page::after { content: ""; position: absolute; border: 1px solid rgba(15, 23, 42, .045); border-radius: 999px; pointer-events: none; }
-      .page::before { width: 28rem; height: 28rem; }
-      .page::after { width: 18rem; height: 18rem; border-color: rgba(15, 23, 42, .035); }
-      button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: .7rem; min-width: 10.5rem; padding: 1rem 1.45rem; border: 1px solid rgba(255,255,255,.86); border-radius: 1rem; color: #111827; background: linear-gradient(135deg, rgba(255,255,255,.86), rgba(241,245,249,.62)); box-shadow: 0 18px 40px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(148,163,184,.18); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); font: 650 .95rem inherit; cursor: pointer; }
-      button:hover { transform: translateY(-2px); }
-      svg { width: 1.1rem; height: 1.1rem; }
+      .page { position: relative; isolation: isolate; display: grid; place-items: center; min-height: 100%; padding: 1.25rem; overflow: hidden; background: radial-gradient(circle at 14% 12%, rgba(186,230,253,.7), transparent 26rem), radial-gradient(circle at 86% 88%, rgba(221,214,254,.68), transparent 28rem), linear-gradient(135deg,#fff,#f8fafc 48%,#eef2ff); }
+      .page::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .3; background-image: linear-gradient(rgba(255,255,255,.44) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.44) 1px, transparent 1px); background-size: 44px 44px; }
+      .card { width: min(100%, 27rem); padding: 2.2rem; border: 1px solid rgba(255,255,255,.78); border-radius: 2rem; text-align: center; background: linear-gradient(145deg,rgba(255,255,255,.74),rgba(255,255,255,.38)); box-shadow: 0 30px 80px rgba(71,85,105,.16), inset 0 1px 0 rgba(255,255,255,.95); backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%); }
+      .badge { display: inline-flex; padding: .42rem .75rem; border: 1px solid rgba(255,255,255,.86); border-radius: 999px; color: #475569; background: rgba(255,255,255,.46); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+      h1 { margin: 1.2rem 0 .65rem; color: #0f172a; font-size: clamp(2.3rem, 10vw, 3.4rem); font-weight: 800; letter-spacing: -.065em; line-height: .98; }
+      p { color: #64748b; font-size: .96rem; line-height: 1.6; }
+      .code { display: flex; justify-content: space-between; gap: 1rem; margin: 1.45rem 0 1rem; padding: .9rem 1rem; border: 1px solid rgba(255,255,255,.86); border-radius: 1rem; color: #312e81; background: rgba(255,255,255,.48); font-size: .9rem; font-weight: 700; }
+      button { width: 100%; min-height: 3.45rem; border: 1px solid rgba(255,255,255,.78); border-radius: 1.05rem; color: #fff; background: linear-gradient(135deg,#6366f1,#4f46e5); box-shadow: 0 14px 28px rgba(79,70,229,.28); font: 750 .98rem inherit; cursor: pointer; }
+      small { display: block; margin-top: 1rem; color: #94a3b8; font-size: .68rem; }
     </style>
   </head>
   <body>
     <main class="page">
-      <button type="button" onclick="window.location.assign('https://auctionr.org/4/41c1aa7e12904d556f2dbd709ffa1957')" aria-label="Download">
-        <span>Download</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-      </button>
+      <section class="card">
+        <span class="badge">Welcome offer</span>
+        <h1>Get $10 free</h1>
+        <p>Sign up through the button below and use the referral code to claim your free $10 offer.</p>
+        <div class="code"><span>Referral code</span><strong>lO02cUcjh</strong></div>
+        <button type="button" onclick="window.location.assign('https://s.hifamiapp.com/1/lO02cUcjh')">Sign up &amp; claim $10 →</button>
+        <small>Offer availability and eligibility are determined by the signup service.</small>
+      </section>
     </main>
   </body>
 </html>

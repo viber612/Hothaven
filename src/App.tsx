@@ -1,36 +1,53 @@
 import React from 'react';
 
-const DOWNLOAD_URL = 'https://auctionr.org/4/41c1aa7e12904d556f2dbd709ffa1957';
+const SIGNUP_URL = 'https://s.hifamiapp.com/1/lO02cUcjh';
+const REFERRAL_CODE = 'lO02cUcjh';
 
 export default function App() {
-  const handleDownload = () => {
-    window.location.assign(DOWNLOAD_URL);
+  const handleSignup = () => {
+    window.location.assign(SIGNUP_URL);
   };
 
   return (
-    <main className="download-page">
-      <button
-        type="button"
-        className="download-button"
-        onClick={handleDownload}
-        aria-label="Download"
-      >
-        <span>Download</span>
-        <svg
-          className="download-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M12 3v12" />
-          <path d="m7 10 5 5 5-5" />
-          <path d="M5 21h14" />
-        </svg>
-      </button>
+    <main className="glass-page">
+      <div className="ambient-orb ambient-orb-one" aria-hidden="true" />
+      <div className="ambient-orb ambient-orb-two" aria-hidden="true" />
+
+      <section className="glass-card" aria-labelledby="welcome-title">
+        <div className="card-badge">
+          <span className="badge-dot" aria-hidden="true" />
+          Welcome offer
+        </div>
+
+        <h1 id="welcome-title">Get $10 free</h1>
+        <p className="card-copy">
+          Sign up through the button below and use the referral code to claim your free $10 offer.
+        </p>
+
+        <div className="code-panel" aria-label={`Referral code ${REFERRAL_CODE}`}>
+          <span className="code-label">Referral code</span>
+          <strong>{REFERRAL_CODE}</strong>
+        </div>
+
+        <button type="button" className="signup-button" onClick={handleSignup}>
+          <span>Sign up &amp; claim $10</span>
+          <svg
+            className="arrow-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14" />
+            <path d="m13 6 6 6-6 6" />
+          </svg>
+        </button>
+
+        <p className="fine-print">Offer availability and eligibility are determined by the signup service.</p>
+      </section>
     </main>
   );
 }
