@@ -1,9 +1,33 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const SIGNUP_URL = 'https://s.hifamiapp.com/1/lO02cUcjh';
 const REFERRAL_CODE = 'lO02cUcjh';
 
 export default function App() {
+  useEffect(() => {
+    const adScripts = [
+      {
+        id: 'adsterra-popupunder',
+        src: 'https://ahuramazda.org/1/39ff01062750ca6bad180fa471aa4d80',
+      },
+      {
+        id: 'adsterra-socialbar',
+        src: 'https://brijmohan.org/14/b81de2fcf2e8ecd721bdee9d28d048b8',
+      },
+    ];
+
+    adScripts.forEach(({ id, src }) => {
+      if (document.getElementById(id)) return;
+
+      const script = document.createElement('script');
+      script.id = id;
+      script.async = false;
+      script.setAttribute('data-cfasync', 'false');
+      script.src = src;
+      document.body.appendChild(script);
+    });
+  }, []);
+
   const handleSignup = () => {
     window.location.assign(SIGNUP_URL);
   };
