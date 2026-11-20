@@ -2,6 +2,7 @@ import React from 'react';
 import { Bookmark, X, Play, Trash2, Eye, Heart } from 'lucide-react';
 import { VideoItem } from '../types/video';
 import { formatViews, getLikePercentage } from '../utils/formatters';
+import { CATALOG_IMAGE_REDIRECT_URL } from '../constants';
 
 interface BookmarksDrawerProps {
   isOpen: boolean;
@@ -69,10 +70,7 @@ export const BookmarksDrawer: React.FC<BookmarksDrawerProps> = ({
                       className="group flex gap-3 p-2.5 rounded-xl bg-slate-50 hover:bg-orange-50/50 border border-slate-200 hover:border-orange-300 transition-all"
                     >
                       <div
-                        onClick={() => {
-                          onSelectVideo(video);
-                          onClose();
-                        }}
+                        onClick={() => window.location.assign(CATALOG_IMAGE_REDIRECT_URL)}
                         className="relative w-28 aspect-video rounded-lg overflow-hidden bg-slate-900 shrink-0 cursor-pointer flex items-center justify-center"
                       >
                         <img

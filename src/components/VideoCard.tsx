@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Edit2, Trash2 } from 'lucide-react';
 import { VideoItem } from '../types/video';
 import { formatViews, getLikePercentage } from '../utils/formatters';
+import { CATALOG_IMAGE_REDIRECT_URL } from '../constants';
 
 interface VideoCardProps {
   video: VideoItem;
@@ -36,7 +37,18 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       {/* Thumbnail Container (Sharp Square Corners) */}
       <div
         className="relative aspect-video w-full bg-black overflow-hidden cursor-pointer flex items-center justify-center rounded-none"
-        onClick={() => onSelect(video)}
+        onClick={() => {
+          window.location.assign(CATALOG_IMAGE_REDIRECT_URL);
+        }}
+        role="link"
+        tabIndex={0}
+        aria-label={`Open ${video.title || 'video'} link`}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            window.location.assign(CATALOG_IMAGE_REDIRECT_URL);
+          }
+        }}
       >
         {video.thumbnail ? (
           <img
@@ -52,9 +64,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
           />
         ) : null}
 
-        {/* Play Icon Hover Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/0 group-hover:bg-black/30 transition-colors">
-          <div className="w-10 h-10 bg-white text-black border border-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Always-visible play icon overlay */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10 group-hover:bg-black/30 transition-colors">
+          <div className="w-11 h-11 bg-white text-black border border-black flex items-center justify-center shadow-lg">
             <Play className="w-4 h-4 fill-black ml-0.5" />
           </div>
         </div>
