@@ -1,199 +1,589 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { ImagePlus, Lock, LogOut, Trash2, Upload, X } from 'lucide-react';
-import { auth, db } from './lib/firebase';
-import { resizeImageFile } from './utils/thumbnail';
-import { addVideoToFirestore, deleteVideoFromFirestore } from './services/videoService';
-import { VideoItem } from './types/video';
-import './index.css';
+import {
+  Flame,
+  Search,
+  Filter,
+  SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+  Award,
+} from 'lucide-react';
+import { VideoItem, VideoCategory, SortOption, ToastMessage } from './types/video';
+import {
+  subscribeToVideos,
+  addVideoToFirestore,
+  batchAddVideosToFirestore,
+  updateVideoInFirestore,
+  deleteVideoFromFirestore,
+  deleteAllVideosFromFirestore,
+  incrementVideoViews,
+  toggleVideoLike,
+} from './services/videoService';
+import { Header } from './components/Header';
+import { HeroFeatured } from './components/HeroFeatured';
+import { VideoCard } from './components/VideoCard';
+import { VideoPlayerModal } from './components/VideoPlayerModal';
+import { AdminPanelModal } from './components/AdminPanelModal';
+import { AgeGateModal } from './components/AgeGateModal';
+import { BookmarksDrawer } from './components/BookmarksDrawer';
+import { ToastContainer } from './components/Toast';
+import { Footer } from './components/Footer';
+import { auth } from './lib/firebase';
+const ITEMS_PER_PAGE = 12;
 
-const COLLECTION = 'videos';
+const CATEGORIES: VideoCategory[] = [
+  'All',
+  'HD Videos',
+  'Trending',
+  'Amateur',
+  'Solo',
+  'Hardcore',
+  'VR & 4K',
+];
 
 export default function App() {
-  const [images, setImages] = useState<VideoItem[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [selectedImage, setSelectedImage] = useState<VideoItem | null>(null);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const logoTapCount = useRef(0);
-  const lastLogoTap = useRef(0);
-  const fileInput = useRef<HTMLInputElement>(null);
+  // 1. Age Gate State
+  const [isAgeVerified, setIsAgeVerified] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hothaven_age_verified') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showAgeGateModal, setShowAgeGateModal] = useState<boolean>(!isAgeVerified);
 
-  useEffect(() => {
-    if (!db) return;
-    const imageQuery = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
-    return onSnapshot(imageQuery, (snapshot) => {
-      const records = snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() } as VideoItem))
-        .filter((item) => Boolean(item.thumbnail));
-      setImages(records);
-    }, () => setError('Unable to load the gallery right now.'));
-  }, []);
+  // 2. Real-time Firestore Videos
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [isLoadingVideos, setIsLoadingVideos] = useState<boolean>(true);
+
+  // 3. Search & Filtering
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<VideoCategory>('All');
+  const [sortBy, setSortBy] = useState<SortOption>('latest');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // 4. Modals and Drawers State
+  const [activePlayerVideo, setActivePlayerVideo] = useState<VideoItem | null>(null);
+  const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [editingVideo, setEditingVideo] = useState<VideoItem | null>(null);
+  const [showBookmarksDrawer, setShowBookmarksDrawer] = useState<boolean>(false);
+
+  // 5. Admin Authentication State
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('hothaven_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (!auth) return;
-    return onAuthStateChanged(auth, (user) => setIsAdmin(Boolean(user)));
+    return onAuthStateChanged(auth, (user) => {
+      setIsAdmin(Boolean(user));
+      try {
+        if (user) sessionStorage.setItem('hothaven_admin_auth', 'true');
+        else sessionStorage.removeItem('hothaven_admin_auth');
+      } catch {
+        // Ignore storage errors.
+      }
+    });
   }, []);
 
-  const handleLogoTap = () => {
-    const now = Date.now();
-    logoTapCount.current = now - lastLogoTap.current < 700 ? logoTapCount.current + 1 : 1;
-    lastLogoTap.current = now;
-    if (logoTapCount.current >= 3) {
-      logoTapCount.current = 0;
-      setShowAdmin(true);
-      setError('');
-      setMessage('');
-    }
-  };
-
-  const handleLogin = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError('');
+  // 6. Bookmarks State
+  const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
     try {
-      if (!auth) throw new Error('Firebase Authentication is unavailable.');
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      setEmail('');
-      setPassword('');
-      setMessage('Admin access granted.');
+      const saved = localStorage.getItem('hothaven_bookmarks');
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      setError('Sign-in failed. Check the admin email and password.');
+      return [];
+    }
+  });
+
+  // 7. Liked Videos Local Tracking
+  const [likedIds, setLikedIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('hothaven_liked_videos');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // 8. Toast Notifications
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now().toString();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Subscribe to real-time Firestore synchronization
+  useEffect(() => {
+    const unsubscribe = subscribeToVideos((fetchedVideos) => {
+      setVideos(fetchedVideos);
+      setIsLoadingVideos(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Save Bookmarks to Local Storage
+  useEffect(() => {
+    try {
+      localStorage.setItem('hothaven_bookmarks', JSON.stringify(bookmarkedIds));
+    } catch (e) {
+      console.warn('Unable to persist bookmarks:', e);
+    }
+  }, [bookmarkedIds]);
+
+  // Save Liked IDs to Local Storage
+  useEffect(() => {
+    try {
+      localStorage.setItem('hothaven_liked_videos', JSON.stringify(likedIds));
+    } catch (e) {
+      console.warn('Unable to persist liked videos:', e);
+    }
+  }, [likedIds]);
+
+  // Prevent background body scrolling when any overlay/modal/drawer is open
+  useEffect(() => {
+    const isAnyModalOpen =
+      showAgeGateModal ||
+      activePlayerVideo !== null ||
+      showAdminModal ||
+      showBookmarksDrawer;
+
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [showAgeGateModal, activePlayerVideo, showAdminModal, showBookmarksDrawer]);
+
+  // Handle Age Verification
+  const handleConfirmAge = () => {
+    try {
+      localStorage.setItem('hothaven_age_verified', 'true');
+    } catch (e) {
+      console.warn('Unable to persist age verification:', e);
+    }
+    setIsAgeVerified(true);
+    setShowAgeGateModal(false);
+    showToast('Age verified! Welcome to HOT HAVEN.', 'success');
+  };
+
+  // Verify admin credentials with Firebase; no password is shipped in the bundle.
+  const handleAuthenticateAdmin = async (email: string, password: string) => {
+    if (!auth) return false;
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return true;
+    } catch {
+      return false;
     }
   };
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
-    setError('');
-    setMessage('');
-    setIsUploading(true);
-    try {
-      for (const file of files) {
-        if (!file.type.startsWith('image/')) continue;
-        const image = await resizeImageFile(file, 1400, 1400, 0.86);
-        await addVideoToFirestore({
-          title: file.name.replace(/\.[^/.]+$/, '') || 'Gallery image',
-          url: '',
-          embedUrl: '',
-          videoType: 'html5',
-          provider: 'Uploaded image',
-          thumbnail: image,
-          category: 'Gallery',
-          duration: '',
-          isFeatured: false,
-        });
+  const handleLockAdmin = () => {
+    if (auth) void signOut(auth);
+    setIsAdmin(false);
+    showToast('Admin Session Locked', 'info');
+  };
+
+  // Filtered and Sorted Videos Computation
+  const filteredVideos = useMemo(() => {
+    let result = [...videos];
+
+    // Category Filter
+    if (selectedCategory !== 'All') {
+      result = result.filter(
+        (v) => v.category && v.category.toLowerCase() === selectedCategory.toLowerCase()
+      );
+    }
+
+    // Search Query Filter (URL, title or provider)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (v) =>
+          (v.title && v.title.toLowerCase().includes(q)) ||
+          (v.url && v.url.toLowerCase().includes(q)) ||
+          (v.provider && v.provider.toLowerCase().includes(q))
+      );
+    }
+
+    // Sorting
+    if (sortBy === 'views') {
+      result.sort((a, b) => b.views - a.views);
+    } else if (sortBy === 'likes') {
+      result.sort((a, b) => b.likes - a.likes);
+    } else if (sortBy === 'featured') {
+      result.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
+    } else {
+      // Default: Latest
+      result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return result;
+  }, [videos, searchQuery, selectedCategory, sortBy]);
+
+  // Pagination Math
+  const totalPages = Math.ceil(filteredVideos.length / ITEMS_PER_PAGE) || 1;
+  const paginatedVideos = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredVideos.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredVideos, currentPage]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, sortBy]);
+
+  // Featured Hero Video selection
+  const featuredVideo = useMemo(() => {
+    return videos.find((v) => v.isFeatured) || videos[0] || null;
+  }, [videos]);
+
+  // Bookmarked video items
+  const bookmarkedVideos = useMemo(() => {
+    return videos.filter((v) => bookmarkedIds.includes(v.id));
+  }, [videos, bookmarkedIds]);
+
+  // Video Actions
+  const handleSelectVideo = (video: VideoItem) => {
+    setActivePlayerVideo(video);
+    incrementVideoViews(video.id, video.views);
+  };
+
+  const handleToggleBookmark = (video: VideoItem) => {
+    if (bookmarkedIds.includes(video.id)) {
+      setBookmarkedIds((prev) => prev.filter((id) => id !== video.id));
+      showToast(`Removed "${video.title.slice(0, 20)}..." from saved bookmarks`, 'info');
+    } else {
+      setBookmarkedIds((prev) => [...prev, video.id]);
+      showToast(`Saved "${video.title.slice(0, 20)}..." to bookmarks`, 'success');
+    }
+  };
+
+  const handleToggleLike = async (video: VideoItem) => {
+    const isLiked = likedIds.includes(video.id);
+    if (isLiked) {
+      setLikedIds((prev) => prev.filter((id) => id !== video.id));
+      await toggleVideoLike(video.id, video.likes, false);
+      showToast('Unliked video', 'info');
+    } else {
+      setLikedIds((prev) => [...prev, video.id]);
+      await toggleVideoLike(video.id, video.likes, true);
+      showToast('Liked video!', 'success');
+    }
+  };
+
+  const handleShareVideo = (video: VideoItem) => {
+    const shareUrl = `${window.location.origin}?v=${video.id}`;
+    navigator.clipboard.writeText(shareUrl).then(
+      () => showToast('Video link copied to clipboard!', 'success'),
+      () => showToast('Failed to copy link', 'error')
+    );
+  };
+
+  // Admin Video CRUD Actions
+  const handlePublishVideo = async (
+    videoData: Omit<VideoItem, 'id' | 'views' | 'likes' | 'createdAt'> & {
+      views?: number;
+      likes?: number;
+      likePercentage?: number;
+    }
+  ) => {
+    if (!isAdmin) {
+      showToast('Admin access required to publish videos', 'error');
+      return;
+    }
+    const created = await addVideoToFirestore(videoData);
+    setVideos((prev) => {
+      if (prev.some((v) => v.id === created.id)) return prev;
+      return [created, ...prev];
+    });
+  };
+
+  const handleBatchPublishVideos = async (
+    videosData: Array<
+      Omit<VideoItem, 'id' | 'views' | 'likes' | 'createdAt'> & {
+        views?: number;
+        likes?: number;
+        likePercentage?: number;
       }
-      setMessage(`${files.length} image${files.length === 1 ? '' : 's'} added to the gallery.`);
-    } catch {
-      setError('Upload failed. Try a smaller image or fewer files.');
-    } finally {
-      setIsUploading(false);
-      if (fileInput.current) fileInput.current.value = '';
+    >
+  ) => {
+    if (!isAdmin) {
+      showToast('Admin access required to publish videos', 'error');
+      return;
     }
+    const createdList = await batchAddVideosToFirestore(videosData);
+    setVideos((prev) => {
+      const existingIds = new Set(prev.map((v) => v.id));
+      const newItems = createdList.filter((item) => !existingIds.has(item.id));
+      return [...newItems, ...prev];
+    });
   };
 
-  const handleDelete = async (image: VideoItem) => {
-    if (!window.confirm(`Delete “${image.title}” from the gallery?`)) return;
+  const handleUpdateVideo = async (id: string, updates: Partial<VideoItem>) => {
+    if (!isAdmin) {
+      showToast('Admin access required to edit videos', 'error');
+      return;
+    }
+    setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, ...updates } : v)));
+    await updateVideoInFirestore(id, updates);
+    setEditingVideo(null);
+  };
+
+  const handleDeleteVideo = async (id: string) => {
+    if (!isAdmin) {
+      showToast('Admin access required to delete videos', 'error');
+      return;
+    }
     try {
-      await deleteVideoFromFirestore(image.id);
-      setMessage('Image deleted.');
-    } catch {
-      setError('Could not delete that image.');
+      setVideos((prev) => prev.filter((v) => v.id !== id));
+      if (activePlayerVideo?.id === id) {
+        setActivePlayerVideo(null);
+      }
+      if (editingVideo?.id === id) {
+        setEditingVideo(null);
+      }
+      await deleteVideoFromFirestore(id);
+      showToast('Video removed from catalog.', 'success');
+    } catch (err) {
+      console.error('Failed to delete video:', err);
+      showToast('Error deleting video.', 'error');
     }
   };
 
-  const sortedImages = useMemo(() => images, [images]);
+  const handleDeleteAllVideos = async () => {
+    if (!isAdmin) {
+      showToast('Admin access required to clear videos', 'error');
+      return;
+    }
+    setVideos([]);
+    setActivePlayerVideo(null);
+    setEditingVideo(null);
+    await deleteAllVideosFromFirestore();
+    showToast('All videos wiped from catalog.', 'success');
+  };
 
   return (
-    <main className="gallery-page">
-      <header className="gallery-header">
-        <button className="brand-button" onClick={handleLogoTap} aria-label="Open admin panel">
-          <span className="brand-mark">H</span>
-          <span>HOTHAVEN</span>
-        </button>
-        <span className="gallery-caption">Image gallery</span>
-      </header>
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 font-sans flex flex-col selection:bg-orange-500 selection:text-white">
+      {/* Age Verification Modal */}
+      <AgeGateModal isOpen={showAgeGateModal} onConfirm={handleConfirmAge} />
 
-      <section className="gallery-content">
-        <div className="gallery-heading">
-          <div>
-            <p className="eyebrow">Shared collection</p>
-            <h1>Gallery</h1>
-          </div>
-          <p className="gallery-count">{sortedImages.length} image{sortedImages.length === 1 ? '' : 's'}</p>
-        </div>
+      {/* Header */}
+      <Header
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onOpenAdmin={() => setShowAdminModal(true)}
+      />
 
-        {sortedImages.length === 0 ? (
-          <div className="empty-gallery">
-            <ImagePlus size={34} strokeWidth={1.5} />
-            <h2>No images yet</h2>
-            <p>The admin can add images from a computer. New uploads appear here for everyone.</p>
-          </div>
-        ) : (
-          <div className="image-grid">
-            {sortedImages.map((image) => (
-              <article className="image-card" key={image.id}>
-                <button className="image-button" onClick={() => setSelectedImage(image)} aria-label={`View ${image.title}`}>
-                  <img src={image.thumbnail} alt={image.title} loading="lazy" />
-                </button>
-                {isAdmin && (
-                  <button className="delete-image" onClick={() => void handleDelete(image)} aria-label={`Delete ${image.title}`}>
-                    <Trash2 size={15} />
-                  </button>
-                )}
-              </article>
+      {/* Main Content */}
+      <main className="flex-1">
+        {/* Featured Banner (Shown when no search active) */}
+        {!searchQuery && <HeroFeatured />}
+
+        {/* Video Catalog Section */}
+        <section
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+          itemScope
+          itemType="https://schema.org/CollectionPage"
+        >
+          {/* Category Pill Filters Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                    : 'bg-white border border-slate-200 text-slate-700 hover:border-orange-300 hover:text-orange-600'
+                }`}
+              >
+                {cat}
+              </button>
             ))}
           </div>
-        )}
-      </section>
 
-      {selectedImage && (
-        <div className="lightbox" role="dialog" aria-modal="true" onClick={() => setSelectedImage(null)}>
-          <button className="close-lightbox" onClick={() => setSelectedImage(null)} aria-label="Close image"><X /></button>
-          <img src={selectedImage.thumbnail} alt={selectedImage.title} onClick={(event) => event.stopPropagation()} />
-        </div>
-      )}
+          {/* Controls Bar: Section Title & Results Count */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 font-display flex items-center gap-2.5">
+                <Flame className="w-6 h-6 text-orange-500" />
+                <span>
+                  {searchQuery
+                    ? `Search Results for "${searchQuery}"`
+                    : selectedCategory !== 'All'
+                    ? `${selectedCategory.toUpperCase()} VIDEOS`
+                    : 'ALL HD ADULT VIDEOS'}
+                </span>
+                <span className="text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+                  {filteredVideos.length} Streams
+                </span>
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Fast responsive playback in Ultra HD & 4K quality with full metadata.
+              </p>
+            </div>
 
-      {showAdmin && (
-        <div className="admin-overlay" role="dialog" aria-modal="true">
-          <section className="admin-panel">
-            <button className="close-admin" onClick={() => setShowAdmin(false)} aria-label="Close admin panel"><X /></button>
-            {!isAdmin ? (
-              <>
-                <div className="admin-icon"><Lock size={22} /></div>
-                <p className="eyebrow">Private area</p>
-                <h2>Admin access</h2>
-                <p className="admin-copy">Sign in to add images from your computer and manage the shared gallery.</p>
-                <form onSubmit={handleLogin} className="admin-form">
-                  <input type="email" placeholder="Admin email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
-                  <input type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
-                  <button className="primary-button" type="submit">Unlock gallery</button>
-                </form>
-              </>
-            ) : (
-              <>
-                <div className="admin-panel-heading">
-                  <div><p className="eyebrow">Content manager</p><h2>Add images</h2></div>
-                  <button className="secondary-button" onClick={() => void signOut(auth!)}><LogOut size={15} /> Lock</button>
-                </div>
-                <p className="admin-copy">Choose one or more images from your computer. They are resized and saved to the shared Firestore gallery for all viewers.</p>
-                <input ref={fileInput} type="file" accept="image/*" multiple onChange={(event) => void handleUpload(event)} hidden />
-                <button className="upload-dropzone" onClick={() => fileInput.current?.click()} disabled={isUploading}>
-                  <Upload size={25} />
-                  <strong>{isUploading ? 'Uploading images…' : 'Choose images from computer'}</strong>
-                  <span>JPG, PNG, WEBP · multiple files supported</span>
+            {/* Total Streams count */}
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Total catalog:</span>
+              <span className="font-mono font-bold text-slate-900">{videos.length} videos</span>
+            </div>
+          </div>
+
+          {/* Catalog Grid */}
+          {isLoadingVideos ? (
+            <div className="py-24 flex flex-col items-center justify-center text-slate-400">
+              <RefreshCw className="w-10 h-10 animate-spin text-orange-500 mb-3" />
+              <p className="text-sm font-semibold text-slate-600">Loading HD video streams...</p>
+            </div>
+          ) : paginatedVideos.length === 0 ? (
+            <div className="py-16 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-1">No Videos Found</h3>
+              <p className="text-slate-500 text-sm max-w-md mx-auto mb-4">
+                {videos.length === 0
+                  ? 'No videos are currently available in the catalog.'
+                  : 'No video items match your search query or selected category.'}
+              </p>
+              {(searchQuery || selectedCategory !== 'All') && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('All');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold shadow-md shadow-orange-500/20 cursor-pointer transition-all"
+                >
+                  Reset All Filters
                 </button>
-              </>
-            )}
-            {(error || message) && <p className={error ? 'status-error' : 'status-message'}>{error || message}</p>}
-          </section>
-        </div>
-      )}
-    </main>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {paginatedVideos.map((video) => (
+                <VideoCard
+                  key={video.id}
+                  video={video}
+                  onSelect={handleSelectVideo}
+                  isAdmin={isAdmin}
+                  onEdit={(v) => {
+                    setEditingVideo(v);
+                    setShowAdminModal(true);
+                  }}
+                  onDelete={(id) => handleDeleteVideo(id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="mt-12 flex items-center justify-center gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+
+              <span className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 font-mono shadow-xs">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
+                title="Next Page"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </section>
+      </main>
+
+      {/* Video Player Modal */}
+      <VideoPlayerModal
+        video={activePlayerVideo}
+        onClose={() => setActivePlayerVideo(null)}
+        onLike={handleToggleLike}
+        isLiked={activePlayerVideo ? likedIds.includes(activePlayerVideo.id) : false}
+        allVideos={videos}
+        onSelectVideo={handleSelectVideo}
+        isAdmin={isAdmin}
+        onEditVideo={(v) => {
+          setEditingVideo(v);
+          setShowAdminModal(true);
+          setActivePlayerVideo(null);
+        }}
+        onDeleteVideo={handleDeleteVideo}
+      />
+
+      {/* Admin Management Modal */}
+      <AdminPanelModal
+        isOpen={showAdminModal}
+        onClose={() => {
+          setShowAdminModal(false);
+          setEditingVideo(null);
+        }}
+        isAdmin={isAdmin}
+        onAuthenticateAdmin={handleAuthenticateAdmin}
+        onLockAdmin={handleLockAdmin}
+        onPublishVideo={handlePublishVideo}
+        onBatchPublishVideos={handleBatchPublishVideos}
+        editingVideo={editingVideo}
+        onUpdateVideo={handleUpdateVideo}
+        onDeleteVideo={handleDeleteVideo}
+        onDeleteAllVideos={handleDeleteAllVideos}
+        showToast={showToast}
+      />
+
+      {/* Bookmarks Drawer */}
+      <BookmarksDrawer
+        isOpen={showBookmarksDrawer}
+        onClose={() => setShowBookmarksDrawer(false)}
+        bookmarks={bookmarkedVideos}
+        onSelectVideo={handleSelectVideo}
+        onRemoveBookmark={handleToggleBookmark}
+        onClearAll={() => {
+          setBookmarkedIds([]);
+          showToast('Cleared all bookmarks', 'info');
+        }}
+      />
+
+      {/* Toast System */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Footer */}
+      <Footer
+        onOpenAdminModal={() => setShowAdminModal(true)}
+      />
+    </div>
   );
 }

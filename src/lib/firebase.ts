@@ -7,7 +7,7 @@ let app: any = null;
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 } catch (error) {
-  console.warn('Firebase initialization failed:', error);
+  console.warn('Firebase initialization fallback:', error);
 }
 
 let db: any = null;
@@ -16,19 +16,13 @@ if (app) {
   try {
     db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true }, databaseId);
   } catch {
-    try {
-      db = getFirestore(app, databaseId);
-    } catch {
-      db = getFirestore(app);
-    }
+    try { db = getFirestore(app, databaseId); } catch { db = getFirestore(app); }
   }
 }
 
 let auth: any = null;
-try {
-  if (app) auth = getAuth(app);
-} catch (error) {
-  console.warn('Firebase Auth initialization failed:', error);
+if (app) {
+  try { auth = getAuth(app); } catch (error) { console.warn('Firebase Auth unavailable:', error); }
 }
 
 export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
@@ -37,9 +31,7 @@ export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Rec
     if (value === undefined) continue;
     if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
       sanitized[key] = sanitizeForFirestore(value);
-    } else {
-      sanitized[key] = value;
-    }
+    } else sanitized[key] = value;
   }
   return sanitized;
 }
