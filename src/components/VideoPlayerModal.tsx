@@ -16,9 +16,6 @@ interface VideoPlayerModalProps {
   onClose: () => void;
   onLike: (video: VideoItem) => void;
   isLiked: boolean;
-  isBookmarked?: boolean;
-  onToggleBookmark?: (video: VideoItem) => void;
-  onShare?: (video: VideoItem) => void;
   allVideos: VideoItem[];
   onSelectVideo: (video: VideoItem) => void;
   isAdmin?: boolean;

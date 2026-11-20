@@ -1,47 +1,36 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-// Initialize Firebase App safely
 let app: any = null;
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-} catch (e) {
-  console.warn('Firebase app initialization fallback:', e);
+} catch (error) {
+  console.warn('Firebase initialization failed:', error);
 }
 
-// Initialize Firestore safely using specified databaseId and auto-detect long polling
 let db: any = null;
 const databaseId = (firebaseConfig as any)?.firestoreDatabaseId || undefined;
-
 if (app) {
   try {
-    // Use experimentalAutoDetectLongPolling to ensure reliable connections in iframe/proxy environments
-    db = initializeFirestore(
-      app,
-      {
-        experimentalAutoDetectLongPolling: true,
-      },
-      databaseId
-    );
+    db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true }, databaseId);
   } catch {
     try {
       db = getFirestore(app, databaseId);
     } catch {
-      try {
-        db = getFirestore(app);
-      } catch (e) {
-        console.warn('Firestore instance not available:', e);
-      }
+      db = getFirestore(app);
     }
   }
 }
 
-/**
- * Utility to sanitize objects for Firestore write operations.
- * Removes all `undefined` values recursively to avoid Firestore schema errors.
- */
+let auth: any = null;
+try {
+  if (app) auth = getAuth(app);
+} catch (error) {
+  console.warn('Firebase Auth initialization failed:', error);
+}
+
 export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
   const sanitized: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -55,18 +44,4 @@ export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Rec
   return sanitized;
 }
 
-export { app, db };
-
-// Initialize Firebase Authentication (used for secure admin sign-in).
-// The admin password is verified server-side by Firebase and never exists
-// in the source code or the compiled JavaScript bundle.
-let auth: any = null;
-if (app) {
-  try {
-    auth = getAuth(app);
-  } catch (e) {
-    console.warn('Firebase Auth not available:', e);
-  }
-}
-
-export { auth };
+export { app, auth, db };
