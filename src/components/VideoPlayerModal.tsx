@@ -10,7 +10,6 @@ import {
 import { VideoItem } from '../types/video';
 import { formatViews, getLikePercentage } from '../utils/formatters';
 import { parseVideoUrl, fetchRemoteVideoMetadata } from '../utils/videoParser';
-import { CATALOG_IMAGE_REDIRECT_URL } from '../constants';
 
 interface VideoPlayerModalProps {
   video: VideoItem | null;
@@ -211,9 +210,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               {recommendations.map((rec) => (
                 <div
                   key={rec.id}
-                  onClick={() => {
-                    window.location.assign(CATALOG_IMAGE_REDIRECT_URL);
-                  }}
+                  onClick={() => onSelectVideo(rec)}
                   className="group bg-white border border-black rounded-none cursor-pointer flex flex-col"
                 >
                   <div className="relative aspect-video w-full bg-black overflow-hidden flex items-center justify-center rounded-none">
@@ -226,8 +223,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
-                    <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 flex items-center justify-center transition-all">
-                      <div className="w-9 h-9 bg-white text-black border border-black flex items-center justify-center shadow-lg">
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                      <div className="w-9 h-9 bg-white text-black border border-black flex items-center justify-center">
                         <Play className="w-4 h-4 fill-black ml-0.5" />
                       </div>
                     </div>
